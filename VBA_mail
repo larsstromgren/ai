@@ -15,7 +15,7 @@ Sub ExtractMailsFromFolder()
     
     Set OutNamespace = OutApp.GetNamespace("MAPI")
     Set OutFolder = OutNamespace.GetDefaultFolder(olFolderInbox) ' Starta från inkorgen
-    cutDate = DateValue("01/01/2024") ' Filtrera på datum
+    cutDate = DateValue("01/09/2022") ' Filtrera på datum
 
     ' Sätt arbetsblad och rubriker
     Set ws = ThisWorkbook.Sheets("Sheet1") ' Se till att det finns ett ark med detta namn
