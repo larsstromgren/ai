@@ -1,0 +1,78 @@
+iturn0image0turn0image1turn0image3turn0image5För att återskapa en karta över Stockholms stadsdelar med en liknande färgskala kan du använda Python tillsammans med bibliotek som GeoPandas och Folium. Här är en steg-för-steg-guide för att skapa en sådan karta:
+
+1. **Installera nödvändiga Python-bibliotek**:
+
+   Om du inte redan har installerat dessa bibliotek, gör det med följande kommandon:
+
+   ```bash
+   pip install geopandas folium
+   ```
+
+2. **Ladda ner GeoJSON-data för Stockholms stadsdelar**:
+
+   Du kan hämta en GeoJSON-fil som innehåller gränserna för Stockholms stadsdelar från OpenStreetMap via BBBike:
+
+   - Gå till [BBBike's OSM-extrakt för Stockholm](https://download.bbbike.org/osm/bbbike/Stockholm/).
+   - Ladda ner filen `stockholm.geojson` från listan. citeturn0search6
+
+3. **Läs in GeoJSON-filen med GeoPandas**:
+
+   Använd GeoPandas för att läsa in GeoJSON-filen:
+
+   ```python
+   import geopandas as gpd
+
+   # Läs in GeoJSON-filen
+   gdf = gpd.read_file('path_to/stockholm.geojson')
+   ```
+
+4. **Skapa en Folium-karta och lägg till GeoJSON-lagret**:
+
+   Använd Folium för att skapa en interaktiv karta och lägg till GeoJSON-lagret med en färgskala:
+
+   ```python
+   import folium
+   from branca.colormap import linear
+
+   # Skapa en Folium-karta centrerad över Stockholm
+   m = folium.Map(location=[59.3293, 18.0686], zoom_start=11)
+
+   # Definiera en färgskala
+   colormap = linear.Set1_09.scale(0, len(gdf))
+
+   # Funktion för att tilldela färger till varje stadsdel
+   def style_function(feature):
+       return {
+           'fillColor': colormap(feature['id'] % len(colormap.colors)),
+           'color': 'black',
+           'weight': 1,
+           'fillOpacity': 0.7,
+       }
+
+   # Lägg till GeoJSON-lagret med stilfunktion
+   folium.GeoJson(
+       gdf,
+       style_function=style_function,
+       tooltip=folium.GeoJsonTooltip(fields=['name'], aliases=['Stadsdel:'])
+   ).add_to(m)
+
+   # Lägg till färgskalan i kartan
+   colormap.add_to(m)
+
+   # Spara kartan som en HTML-fil
+   m.save('stockholm_stadsdelar.html')
+   ```
+
+5. **Visa kartan**:
+
+   Öppna den sparade HTML-filen (`stockholm_stadsdelar.html`) i en webbläsare för att se den interaktiva kartan med färgkodade stadsdelar.
+
+**Noteringar**:
+
+- **GeoJSON-data**: Se till att den nedladdade GeoJSON-filen innehåller de attribut du vill visa, såsom stadsdelsnamn. Om attributnamnen skiljer sig kan du behöva justera `fields` och `aliases` i `GeoJsonTooltip`.
+  
+- **Färgskala**: I exemplet används `Set1_09` från `branca.colormap` för att skapa en färgskala. Du kan välja andra färgskalor som passar dina behov.
+
+- **Anpassning**: Du kan ytterligare anpassa kartans utseende genom att justera parametrar i `style_function` eller lägga till fler lager och funktioner med Folium.
+
+Genom att följa dessa steg kan du skapa en interaktiv karta över Stockholms stadsdelar med en färgskala som liknar den på den bild du refererar till. 
