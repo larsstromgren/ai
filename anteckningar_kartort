@@ -1,0 +1,229 @@
+Här kommer din begärda API-nyckel från Stockholms Stad Trafikkontorets öppna data.
+
+ApiKey=14b7befd-92ef-43aa-b50b-c266335c791b
+Koordinatsystem=SWEREF99 18 00
+Srid=3011
+
+Detta är ett automatgenererat meddelande. Om du inte har beställt denna/dessa API-nycklar ber vi dig bortse från detta e-mail.
+
+
+https://openparking.stockholm.se/LTF-Tolken/v1/pbuss/within?radius=100&lat=59.32784&lng=18.05306&outputFormat=json&apiKey=14b7befd-92ef-43aa-b50b-c266335c791b
+
+
+Agera som GIS-analytiker. Skapa en enkel karta av GeoJSON: 
+
+{
+    "type": "FeatureCollection",
+    "features": [
+        {
+            "type": "Feature",
+            "id": "LTFR_P_BUSS.23",
+            "geometry": {
+                "type": "LineString",
+                "coordinates": [
+                    [
+                        18.053092,
+                        59.327632
+                    ],
+                    [
+                        18.053195,
+                        59.327313
+                    ]
+                ]
+            },
+            "geometry_name": "GEOMETRY",
+            "properties": {
+                "FEATURE_OBJECT_ID": 14852034,
+                "FEATURE_VERSION_ID": 1,
+                "EXTENT_NO": 1,
+                "VALID_FROM": "2017-11-29T23:00:00Z",
+                "START_TIME": 600,
+                "END_TIME": 0,
+                "START_WEEKDAY": "tisdag",
+                "CITATION": "0180 2017-08617",
+                "STREET_NAME": "Ragnar Östbergs Plan",
+                "CITY_DISTRICT": "Kungsholmen",
+                "PARKING_DISTRICT": "Kungsholmen",
+                "ADDRESS": "Ragnar Östbergs Plan 3",
+                "VF_METER": 36,
+                "VF_PLATS_TYP": "Reserverad p-plats buss",
+                "OTHER_INFO": "Servicetid tisdag 00:00-06:00",
+                "RDT_URL": "https://rdt.transportstyrelsen.se/rdt/AF06_View.aspx?BeslutsMyndighetKod=0180&BeslutadAr=2017&LopNr=08617",
+                "PARKING_RATE": "taxa 3: 20 kr/tim vardagar 7-19, 15 kr/tim dag före helgdag 11-17, Boende: 1100 kr/månad eller 75 kr/dygn",
+                "FID": 23
+            },
+            "bbox": [
+                18.053092,
+                59.327313,
+                18.053195,
+                59.327632
+            ]
+        },
+        {
+            "type": "Feature",
+            "id": "LTFR_P_BUSS.50",
+            "geometry": {
+                "type": "LineString",
+                "coordinates": [
+                    [
+                        18.051288,
+                        59.327894
+                    ],
+                    [
+                        18.05152,
+                        59.327877
+                    ],
+                    [
+                        18.051774,
+                        59.327863
+                    ],
+                    [
+                        18.052086,
+                        59.327858
+                    ]
+                ]
+            },
+            "geometry_name": "GEOMETRY",
+            "properties": {
+                "FEATURE_OBJECT_ID": 20650934,
+                "FEATURE_VERSION_ID": 1,
+                "EXTENT_NO": 1,
+                "VALID_FROM": "2023-07-28T22:00:00Z",
+                "START_TIME": 600,
+                "END_TIME": 0,
+                "START_WEEKDAY": "fredag",
+                "CITATION": "0180 2023-02887",
+                "STREET_NAME": "Hantverkargatan",
+                "CITY_DISTRICT": "Kungsholmen",
+                "PARKING_DISTRICT": "Kungsholmen",
+                "ADDRESS": "Hantverkargatan 3L",
+                "VF_PLATS_TYP": "Reserverad p-plats buss",
+                "OTHER_INFO": "Servicetid fredag 00:00-06:00",
+                "RDT_URL": "https://rdt.transportstyrelsen.se/rdt/AF06_View.aspx?BeslutsMyndighetKod=0180&BeslutadAr=2023&LopNr=02887",
+                "PARKING_RATE": "taxa 3: 20 kr/tim vardagar 7-19, 15 kr/tim dag före helgdag 11-17, Boende: 1100 kr/månad eller 75 kr/dygn",
+                "FID": 50
+            },
+            "bbox": [
+                18.051288,
+                59.327858,
+                18.052086,
+                59.327894
+            ]
+        },
+        {
+            "type": "Feature",
+            "id": "LTFR_P_BUSS.51",
+            "geometry": {
+                "type": "LineString",
+                "coordinates": [
+                    [
+                        18.051288,
+                        59.327894
+                    ],
+                    [
+                        18.05152,
+                        59.327877
+                    ],
+                    [
+                        18.051774,
+                        59.327863
+                    ],
+                    [
+                        18.052086,
+                        59.327858
+                    ]
+                ]
+            },
+            "geometry_name": "GEOMETRY",
+            "properties": {
+                "FEATURE_OBJECT_ID": 20650934,
+                "FEATURE_VERSION_ID": 1,
+                "EXTENT_NO": 2,
+                "VALID_FROM": "2023-07-28T22:00:00Z",
+                "START_TIME": 600,
+                "END_TIME": 0,
+                "START_WEEKDAY": "fredag",
+                "CITATION": "0180 2023-02887",
+                "STREET_NAME": "Hantverkargatan",
+                "CITY_DISTRICT": "Kungsholmen",
+                "PARKING_DISTRICT": "Kungsholmen",
+                "ADDRESS": "Hantverkargatan 3L",
+                "VF_PLATS_TYP": "Reserverad p-plats buss",
+                "OTHER_INFO": "Servicetid fredag 00:00-06:00",
+                "RDT_URL": "https://rdt.transportstyrelsen.se/rdt/AF06_View.aspx?BeslutsMyndighetKod=0180&BeslutadAr=2023&LopNr=02887",
+                "PARKING_RATE": "taxa 3: 20 kr/tim vardagar 7-19, 15 kr/tim dag före helgdag 11-17, Boende: 1100 kr/månad eller 75 kr/dygn",
+                "FID": 51
+            },
+            "bbox": [
+                18.051288,
+                59.327858,
+                18.052086,
+                59.327894
+            ]
+        },
+        {
+            "type": "Feature",
+            "id": "LTFR_P_BUSS.28",
+            "geometry": {
+                "type": "LineString",
+                "coordinates": [
+                    [
+                        18.052539,
+                        59.32714
+                    ],
+                    [
+                        18.051921,
+                        59.327082
+                    ],
+                    [
+                        18.050604,
+                        59.32697
+                    ]
+                ]
+            },
+            "geometry_name": "GEOMETRY",
+            "properties": {
+                "FEATURE_OBJECT_ID": 14865812,
+                "FEATURE_VERSION_ID": 1,
+                "EXTENT_NO": 2,
+                "VALID_FROM": "2017-11-29T23:00:00Z",
+                "START_TIME": 600,
+                "END_TIME": 0,
+                "START_WEEKDAY": "fredag",
+                "MAX_HOURS": 1,
+                "CITATION": "0180 2017-09118",
+                "STREET_NAME": "Norr Mälarstrand",
+                "CITY_DISTRICT": "Kungsholmen",
+                "PARKING_DISTRICT": "Kungsholmen",
+                "ADDRESS": "Hantverkargatan 3C - Hantverkargatan 3G",
+                "VF_PLATS_TYP": "Reserverad p-plats buss",
+                "OTHER_INFO": "Servicetid fredag 00:00-06:00",
+                "RDT_URL": "https://rdt.transportstyrelsen.se/rdt/AF06_View.aspx?BeslutsMyndighetKod=0180&BeslutadAr=2017&LopNr=09118",
+                "PARKING_RATE": "taxa 3: 20 kr/tim vardagar 7-19, 15 kr/tim dag före helgdag 11-17, Boende: 1100 kr/månad eller 75 kr/dygn",
+                "FID": 28
+            },
+            "bbox": [
+                18.050604,
+                59.32697,
+                18.052539,
+                59.32714
+            ]
+        }
+    ],
+    "totalFeatures": 4,
+    "numberMatched": 4,
+    "numberReturned": 4,
+    "timeStamp": "2025-02-19T23:39:17.704Z",
+    "crs": {
+        "type": "name",
+        "properties": {
+            "name": "urn:ogc:def:crs:EPSG::4326"
+        }
+    },
+    "bbox": [
+        18.050604,
+        59.32697,
+        18.053195,
+        59.327894
+    ]
+}
