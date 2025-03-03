@@ -227,3 +227,42 @@ Agera som GIS-analytiker. Skapa en enkel karta av GeoJSON:
         59.327894
     ]
 }
+
+
+
+
+###
+
+
+import requests
+import folium
+
+# API URL
+url = "https://openparking.stockholm.se/LTF-Tolken/v1/pbuss/within?radius=100&lat=59.32784&lng=18.05306&outputFormat=json&apiKey=14b7befd-92ef-43aa-b50b-c266335c791b"
+
+# Hämta data från API:et
+response = requests.get(url)
+
+if response.status_code == 200:
+    data = response.json()
+    
+    # Skapa en karta centrerad på den angivna platsen
+    m = folium.Map(location=[59.32784, 18.05306], zoom_start=16)
+    
+    # Lägg till parkeringsplatserna på kartan
+    for item in data.get("features", []):
+        coords = item["geometry"]["coordinates"]
+        props = item["properties"]
+        
+        folium.Marker(
+            location=[coords[1], coords[0]],
+            popup=f"Plats ID: {props.get('id', 'N/A')}\nAntal platser: {props.get('antal_platser', 'N/A')}",
+            icon=folium.Icon(color='blue', icon='info-sign')
+        ).add_to(m)
+    
+    # Spara kartan
+    m.save("parking_map.html")
+    print("Kartan har sparats som 'parking_map.html'. Öppna den i en webbläsare för att se resultatet.")
+else:
+    print(f"Misslyckades att hämta data. Statuskod: {response.status_code}")
+
