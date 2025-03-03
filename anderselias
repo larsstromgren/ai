@@ -1,0 +1,13 @@
+Spontant tycker jag att du borde kunna dra nytta av AI Swedens resurser (där ju staden är en betalande partner). Där skulle du kunna få tillgång till såväl AI (SveaGPT) som den mjuk-/hårdvara som behövs för vektorisering av dokumenten mm. Mårten Lindskog är stadens representant och kontaktperson hos AI Sweden. Mvh Anders
+
+Från Zoom-chatten/SveaGPT-gruppen:
+"Har kommer info från AI-Sweden gällande filformat i SVEA:
+Vissa filer är bättre lämpade än andra att jobba mot (det har med den underliggande tekniken att göra). Det funkar med alla följande fil-format, men finns möjligheten så försök att prioritera utefter listan nedan. 
+Följande lista visar ordningen från bästa till sämsta fil-format:
+docx 
+2. txt
+3. pptx
+4. doc
+5. pdf"
+
+Det du skulle behöva är det som kallas "Agentic Document Extraction", AI-agenter som är specialiserade på olika delar av PDF, t.ex. https://support.landing.ai/docs/document-extraction (Agentic Document Extraction API)
