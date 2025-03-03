@@ -1,0 +1,42 @@
+import json
+import matplotlib.pyplot as plt
+from shapely.geometry import Polygon, MultiPolygon
+
+# Ladda GeoJSON-data
+file_path = "/mnt/data/VD_01_20220910_Val_20220911.json"
+
+with open(file_path, "r", encoding="utf-8") as f:
+    data = json.load(f)
+
+# Extrahera polygoner och deras namn
+valid_polygons = []
+valid_labels = []
+
+for feature in data["features"]:
+    geometry = feature["geometry"]
+    if geometry["type"] == "Polygon":
+        coordinates = geometry["coordinates"][0]  # Första listan av koordinater
+        if len(coordinates) >= 3:  # Kontrollera att det är en giltig polygon
+            polygon = Polygon(coordinates)
+            valid_polygons.append(polygon)
+            valid_labels.append(feature["properties"]["Vdnamn"])
+    elif geometry["type"] == "MultiPolygon":
+        for poly_coords in geometry["coordinates"]:
+            coordinates = poly_coords[0]
+            if len(coordinates) >= 3:
+                polygon = Polygon(coordinates)
+                valid_polygons.append(polygon)
+                valid_labels.append(feature["properties"]["Vdnamn"])
+
+# Plotta de giltiga polygonerna
+fig, ax = plt.subplots(figsize=(10, 10))
+for polygon in valid_polygons:
+    x, y = polygon.exterior.xy
+    ax.plot(x, y, linewidth=1)
+    ax.fill(x, y, alpha=0.5)
+
+ax.set_title("Visualisering av Valdistrikt")
+ax.set_xlabel("X-koordinat")
+ax.set_ylabel("Y-koordinat")
+
+plt.show()
