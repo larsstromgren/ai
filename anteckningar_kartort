@@ -266,3 +266,36 @@ if response.status_code == 200:
 else:
     print(f"Misslyckades att hämta data. Statuskod: {response.status_code}")
 
+
+
+
+###
+
+import matplotlib.pyplot as plt
+from shapely.geometry import Polygon
+
+# Create a list of polygons from the extracted data
+polygons = []
+labels = []
+for feature in features:
+    geometry = feature.get("geometry", {})
+    coordinates = geometry.get("coordinates", [[]])[0]
+    if len(coordinates) > 2:  # Ensure it's a valid polygon
+        poly = Polygon(coordinates)
+        polygons.append(poly)
+        labels.append(feature["properties"].get("Vdnamn", "N/A"))
+
+# Plot the polygons
+fig, ax = plt.subplots(figsize=(10, 10))
+for poly, label in zip(polygons, labels):
+    x, y = poly.exterior.xy
+    ax.fill(x, y, alpha=0.5, edgecolor="black", linewidth=1)
+    ax.text(poly.centroid.x, poly.centroid.y, label, fontsize=8, ha='center')
+
+ax.set_title("Geografiska områden från GeoJSON-filen")
+plt.xlabel("X Koordinat")
+plt.ylabel("Y Koordinat")
+plt.show()
+
+
+###
