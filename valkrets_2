@@ -1,0 +1,48 @@
+import json
+import geopandas as gpd
+import folium
+from shapely.geometry import shape, Polygon, MultiPolygon
+from pyproj import Transformer, CRS
+
+# Ange sökvägen till din JSON-fil
+file_path = "C:/Users/DittNamn/Documents/geodata/VD_01_20220910_Val_20220911.json"  # Ändra till rätt sökväg
+
+# Ladda JSON-filen
+with open(file_path, "r", encoding="utf-8") as f:
+    data = json.load(f)
+
+# Ange koordinatsystemet
+src_crs = CRS.from_epsg(3006)  # SWEREF99 TM (vanligt i Sverige)
+target_crs = CRS.from_epsg(4326)  # WGS84 (krävs för OSM)
+transformer = Transformer.from_crs(src_crs, target_crs, always_xy=True)
+
+# Skapa en lista för att lagra polygoner
+polygons = []
+
+# Loopa igenom och konvertera geometrierna
+for feature in data["features"]:
+    geom = shape(feature["geometry"])
+    if isinstance(geom, Polygon):
+        transformed_geom = Polygon([transformer.transform(x, y) for x, y in geom.exterior.coords])
+        polygons.append(transformed_geom)
+    elif isinstance(geom, MultiPolygon):
+        for poly in geom.geoms:
+            transformed_geom = Polygon([transformer.transform(x, y) for x, y in poly.exterior.coords])
+            polygons.append(transformed_geom)
+
+# Skapa en GeoDataFrame
+gdf = gpd.GeoDataFrame(geometry=polygons, crs=target_crs)
+
+# Beräkna kartans medelpunkt
+centroid = gdf.unary_union.centroid
+m = folium.Map(location=[centroid.y, centroid.x], zoom_start=10, tiles="OpenStreetMap")
+
+# Lägg till polygonerna på kartan
+for _, row in gdf.iterrows():
+    folium.GeoJson(row.geometry).add_to(m)
+
+# Spara kartan som en HTML-fil
+map_path = "C:/Users/DittNamn/Documents/geodata/karta.html"  # Ändra till rätt sökväg
+m.save(map_path)
+
+print(f"Kartan har sparats här: {map_path}")
