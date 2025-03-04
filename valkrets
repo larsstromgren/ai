@@ -1,0 +1,18 @@
+# Adjusting for MultiPolygon geometries
+fig, ax = plt.subplots(figsize=(10, 10))
+
+for poly, name in zip(polygons, names):
+    if poly.geom_type == "Polygon":
+        x, y = poly.exterior.xy
+        ax.plot(x, y, linewidth=1)
+        ax.fill(x, y, alpha=0.4, label=name)
+    elif poly.geom_type == "MultiPolygon":
+        for sub_poly in poly.geoms:
+            x, y = sub_poly.exterior.xy
+            ax.plot(x, y, linewidth=1)
+            ax.fill(x, y, alpha=0.4)
+
+ax.set_title("Karta över Valkretsar")
+ax.set_xlabel("Longitude")
+ax.set_ylabel("Latitude")
+plt.show()
