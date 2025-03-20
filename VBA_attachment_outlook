@@ -1,0 +1,112 @@
+Option Explicit
+
+Sub SaveOutlookAttachments()
+
+    'This early-binding version requires a reference to the Outlook and Scripting Runtime object libraries
+    
+    Dim ol As Outlook.Application
+    Dim ns As Outlook.Namespace
+    Dim fol As Outlook.Folder
+    Dim i As Object
+    Dim mi As Outlook.MailItem
+    Dim at As Outlook.Attachment
+    Dim fso As Scripting.FileSystemObject
+    Dim dir As Scripting.Folder
+    Dim dirName As String
+    
+    Set fso = New Scripting.FileSystemObject
+    
+    Set ol = New Outlook.Application
+    Set ns = ol.GetNamespace("MAPI")
+    Set fol = ns.Folders(1).Folders("Dell")
+    
+    For Each i In fol.Items
+    
+        If i.Class = olMail Then
+        
+            Set mi = i
+            
+            If mi.Attachments.Count > 0 Then
+                'Debug.Print mi.SenderName, mi.ReceivedTime, mi.Attachments.Count
+                
+                dirName = _
+                    "C:\Outlook Files\" & _
+                    Format(mi.ReceivedTime, "yyyy-mm-dd hh-nn-ss ") & _
+                    Left(Replace(mi.Subject, ":", ""), 10)
+                
+                If fso.FolderExists(dirName) Then
+                    Set dir = fso.GetFolder(dirName)
+                Else
+                    Set dir = fso.CreateFolder(dirName)
+                End If
+                
+                For Each at In mi.Attachments
+                
+                    'Debug.Print vbTab, at.DisplayName, at.Size
+                    at.SaveAsFile dir.Path & "\" & at.Filename
+                    
+                Next at
+                
+            End If
+            
+        End If
+    
+    Next i
+    
+End Sub
+
+Sub SaveOutlookAttachmentsLateBinding()
+
+    'This late-binding version allows you to remove the references to the Outlook and Scripting Runtime object libraries
+    
+    Dim ol As Object    'Outlook.Application
+    Dim ns As Object    'Outlook.Namespace
+    Dim fol As Object   'Outlook.Folder
+    Dim i As Object
+    Dim mi As Object    'Outlook.MailItem
+    Dim at As Object    'Outlook.Attachment
+    Dim fso As Object   'Scripting.FileSystemObject
+    Dim dir As Object   'Scripting.Folder
+    Dim dirName As String
+    
+    Set fso = CreateObject(Class:="Scripting.FileSystemObject")
+    
+    Set ol = CreateObject(Class:="Outlook.Application")
+    Set ns = ol.GetNamespace("MAPI")
+    Set fol = ns.Folders(1).Folders("Dell")
+    
+    For Each i In fol.Items
+    
+        If i.Class = 43 Then
+        
+            Set mi = i
+            
+            If mi.Attachments.Count > 0 Then
+                'Debug.Print mi.SenderName, mi.ReceivedTime, mi.Attachments.Count
+                
+                dirName = _
+                    "C:\Outlook Files\" & _
+                    Format(mi.ReceivedTime, "yyyy-mm-dd hh-nn-ss ") & _
+                    Left(Replace(mi.Subject, ":", ""), 10)
+                
+                If fso.FolderExists(dirName) Then
+                    Set dir = fso.GetFolder(dirName)
+                Else
+                    Set dir = fso.CreateFolder(dirName)
+                End If
+                
+                For Each at In mi.Attachments
+                
+                    'Debug.Print vbTab, at.DisplayName, at.Size
+                    at.SaveAsFile dir.Path & "\" & at.Filename
+                    
+                Next at
+                
+            End If
+            
+        End If
+    
+    Next i
+    
+End Sub
+
