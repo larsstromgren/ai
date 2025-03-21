@@ -1,0 +1,160 @@
+Option Explicit
+
+Sub SaveAllOutlookAttachmentsToFoldersAndLogToExcel()
+
+    Dim ol As Object
+    Dim ns As Object
+    Dim rootFolder As Object
+    Dim inbox As Object
+    Dim basePath As String
+    Dim fso As Object
+    Dim logRows As Collection
+    Dim logRow As Variant
+
+    ' Ange basmapp för sparade bilagor
+    basePath = "C:\Outlook Files\Inkorg\"
+    If Right(basePath, 1) <> "\" Then basePath = basePath & "\"
+
+    Set fso = CreateObject("Scripting.FileSystemObject")
+    Call EnsureFolderExists(basePath, fso)
+
+    ' Initiera loggsamling
+    Set logRows = New Collection
+
+    ' Initiera Outlook
+    Set ol = CreateObject("Outlook.Application")
+    Set ns = ol.GetNamespace("MAPI")
+
+    ' Ange rätt konto
+    Set rootFolder = ns.Folders("din@epost.se")
+    Set inbox = rootFolder.Folders("Inkorg")
+
+    ' Processa inkorgen + undermappar
+    Call ProcessFolder(inbox, basePath, fso, logRows)
+
+    ' Exportera till Excel
+    Call ExportLogToExcel(basePath & "logg.xlsx", logRows)
+
+    MsgBox "Klart! Bilagor och logg sparade i: " & basePath
+
+End Sub
+
+Sub ProcessFolder(fol As Object, parentPath As String, fso As Object, logRows As Collection)
+
+    Dim item As Object
+    Dim mi As Object
+    Dim at As Object
+    Dim cleanName As String
+    Dim datedName As String
+    Dim extensionFolder As String
+    Dim folderPath As String
+    Dim subFol As Object
+    Dim fileExt As String
+    Dim saveFolder As String
+    Dim logRow(1 To 4) As String
+
+    ' Mapp för denna Outlook-mapp
+    folderPath = parentPath & CleanFileName(fol.Name) & "\"
+    Call EnsureFolderExists(folderPath, fso)
+
+    For Each item In fol.Items
+        If item.Class = 43 Then ' olMail
+            Set mi = item
+            If mi.Attachments.Count > 0 Then
+                For Each at In mi.Attachments
+                    fileExt = UCase(fso.GetExtensionName(at.Filename))
+                    If fileExt = "" Then
+                        extensionFolder = "ÖVRIGT"
+                    Else
+                        extensionFolder = fileExt
+                    End If
+
+                    saveFolder = folderPath & extensionFolder & "\"
+                    Call EnsureFolderExists(saveFolder, fso)
+
+                    cleanName = CleanFileName(at.Filename)
+                    If Len(cleanName) > 180 Then cleanName = Left(cleanName, 180)
+                    datedName = Format(mi.ReceivedTime, "yyyy-mm-dd") & " - " & cleanName
+
+                    If Not fso.FileExists(saveFolder & datedName) Then
+                        at.SaveAsFile saveFolder & datedName
+
+                        ' Lägg till loggrad
+                        logRow(1) = mi.SenderName
+                        logRow(2) = mi.Subject
+                        logRow(3) = Format(mi.ReceivedTime, "yyyy-mm-dd HH:nn:ss")
+                        logRow(4) = datedName
+                        logRows.Add logRow
+                    End If
+                Next at
+            End If
+        End If
+    Next item
+
+    ' Rekursivt in i undermappar
+    For Each subFol In fol.Folders
+        Call ProcessFolder(subFol, folderPath, fso, logRows)
+    Next subFol
+
+End Sub
+
+Sub ExportLogToExcel(filePath As String, logRows As Collection)
+    Dim xlApp As Object
+    Dim xlWb As Object
+    Dim xlWs As Object
+    Dim i As Long
+    Dim row As Variant
+
+    Set xlApp = CreateObject("Excel.Application")
+    Set xlWb = xlApp.Workbooks.Add
+    Set xlWs = xlWb.Sheets(1)
+
+    ' Rubriker
+    xlWs.Cells(1, 1).Value = "Avsändare"
+    xlWs.Cells(1, 2).Value = "Ämne"
+    xlWs.Cells(1, 3).Value = "Datum"
+    xlWs.Cells(1, 4).Value = "Filnamn"
+
+    ' Data
+    For i = 1 To logRows.Count
+        row = logRows(i)
+        xlWs.Cells(i + 1, 1).Value = row(1)
+        xlWs.Cells(i + 1, 2).Value = row(2)
+        xlWs.Cells(i + 1, 3).Value = row(3)
+        xlWs.Cells(i + 1, 4).Value = row(4)
+    Next i
+
+    ' Autofit
+    xlWs.Columns("A:D").AutoFit
+
+    ' Spara
+    xlWb.SaveAs filePath, 51 ' 51 = xlOpenXMLWorkbook (.xlsx)
+    xlWb.Close SaveChanges:=False
+    xlApp.Quit
+End Sub
+
+Function CleanFileName(str As String) As String
+    Dim invalidChars As Variant
+    Dim i As Long
+    invalidChars = Array("\", "/", ":", "*", "?", """", "<", ">", "|")
+    For i = LBound(invalidChars) To UBound(invalidChars)
+        str = Replace(str, invalidChars(i), "_")
+    Next i
+    CleanFileName = str
+End Function
+
+Sub EnsureFolderExists(fullPath As String, fso As Object)
+    Dim parts As Variant
+    Dim path As String
+    Dim i As Long
+    parts = Split(fullPath, "\")
+    path = parts(0)
+    For i = 1 To UBound(parts)
+        path = path & "\" & parts(i)
+        If path <> "" And Not fso.FolderExists(path) Then
+            On Error Resume Next
+            fso.CreateFolder path
+            On Error GoTo 0
+        End If
+    Next i
+End Sub
