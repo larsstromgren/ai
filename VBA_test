@@ -19,3 +19,25 @@ Sub AccessNonDefaultFolder()
     
 
 End Sub
+
+
+Option Explicit
+
+Sub AccessNonDefaultFolder()
+
+    Dim ol As Outlook.Application
+    Dim ns As Outlook.Namespace
+    Dim fol As Outlook.Folder
+    
+
+    Set ol = New Outlook.Application
+    Set ns = ol.GetNamespace("MAPI")
+    
+    
+    For Each fol In rootfol.Folders
+        Debug.Print fol.Name, fol.FolderPath
+    Next fol
+    
+
+End Sub
+
