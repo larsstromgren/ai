@@ -110,3 +110,100 @@ Sub SaveOutlookAttachmentsLateBinding()
     
 End Sub
 
+
+Option Explicit
+
+Sub SaveAllOutlookAttachments()
+
+    Dim ol As Object
+    Dim ns As Object
+    Dim rootFolder As Object
+    Dim inbox As Object
+    Dim basePath As String
+    Dim fso As Object
+
+    ' Ange sökvägen där bilagor ska sparas
+    basePath = "C:\Outlook Files\Inkorg\"
+    If Right(basePath, 1) <> "\" Then basePath = basePath & "\"
+
+    ' Skapa FileSystemObject
+    Set fso = CreateObject("Scripting.FileSystemObject")
+    Call EnsureFolderExists(basePath, fso)
+
+    ' Initiera Outlook-objekt
+    Set ol = CreateObject("Outlook.Application")
+    Set ns = ol.GetNamespace("MAPI")
+
+    ' Ange ditt Outlook-konto här ↓
+    Set rootFolder = ns.Folders("din@epost.se")
+    Set inbox = rootFolder.Folders("Inkorg")
+
+    ' Starta genomgång
+    Call ProcessFolder(inbox, basePath, fso)
+
+    MsgBox "Klart! Bilagor sparade i: " & basePath
+
+End Sub
+
+Sub ProcessFolder(fol As Object, parentPath As String, fso As Object)
+
+    Dim item As Object
+    Dim mi As Object
+    Dim at As Object
+    Dim cleanName As String
+    Dim folderPath As String
+    Dim subFol As Object
+
+    ' Skapa mapp för denna Outlook-mapp
+    folderPath = parentPath & CleanFileName(fol.Name) & "\"
+    Call EnsureFolderExists(folderPath, fso)
+
+    ' Gå igenom mejl
+    For Each item In fol.Items
+        If item.Class = 43 Then ' olMail
+            Set mi = item
+            If mi.Attachments.Count > 0 Then
+                For Each at In mi.Attachments
+                    cleanName = CleanFileName(at.Filename)
+                    If Len(cleanName) > 180 Then cleanName = Left(cleanName, 180)
+                    If Not fso.FileExists(folderPath & cleanName) Then
+                        at.SaveAsFile folderPath & cleanName
+                    End If
+                Next at
+            End If
+        End If
+    Next item
+
+    ' Rekursivt genom undermappar
+    For Each subFol In fol.Folders
+        Call ProcessFolder(subFol, folderPath, fso)
+    Next subFol
+
+End Sub
+
+Function CleanFileName(str As String) As String
+    Dim invalidChars As Variant
+    Dim i As Long
+    invalidChars = Array("\", "/", ":", "*", "?", """", "<", ">", "|")
+    For i = LBound(invalidChars) To UBound(invalidChars)
+        str = Replace(str, invalidChars(i), "_")
+    Next i
+    CleanFileName = str
+End Function
+
+Sub EnsureFolderExists(fullPath As String, fso As Object)
+    Dim parts As Variant
+    Dim path As String
+    Dim i As Long
+    parts = Split(fullPath, "\")
+    path = parts(0)
+    For i = 1 To UBound(parts)
+        path = path & "\" & parts(i)
+        If path <> "" And Not fso.FolderExists(path) Then
+            On Error Resume Next
+            fso.CreateFolder path
+            On Error GoTo 0
+        End If
+    Next i
+End Sub
+
