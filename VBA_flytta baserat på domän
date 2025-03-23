@@ -1,0 +1,35 @@
+Private Sub Application_NewMailEx(ByVal EntryIDCollection As String)
+    Dim arr() As String
+    Dim i As Integer
+    Dim ns As Outlook.NameSpace
+    Dim itm As Object
+    Dim myAddress As String
+    Dim myDomain As String
+    Dim senderDomain As String
+    Dim destFolder As Outlook.Folder
+
+    Set ns = Application.GetNamespace("MAPI")
+    arr = Split(EntryIDCollection, ",")
+
+    ' Hämta din egen domän
+    myAddress = ns.CurrentUser.AddressEntry.GetExchangeUser().PrimarySmtpAddress
+    myDomain = Mid(myAddress, InStr(1, myAddress, "@") + 1)
+
+    ' Ange målmapp (byt ut "Interna mejl" mot det du vill)
+    Set destFolder = ns.GetDefaultFolder(olFolderInbox).Folders("Interna mejl")
+
+    For i = 0 To UBound(arr)
+        Set itm = ns.GetItemFromID(arr(i))
+        If itm.Class = olMail Then
+            senderDomain = ""
+
+            On Error Resume Next
+            senderDomain = Mid(itm.SenderEmailAddress, InStr(1, itm.SenderEmailAddress, "@") + 1)
+            On Error GoTo 0
+
+            If LCase(senderDomain) = LCase(myDomain) Then
+                itm.Move destFolder
+            End If
+        End If
+    Next
+End Sub
