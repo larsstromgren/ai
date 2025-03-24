@@ -1,0 +1,40 @@
+Sub MärkInterntMail()
+    Dim olMail As Outlook.MailItem
+    Dim olFolder As Outlook.Folder
+    Dim olItem As Object
+    Dim myAddress As String
+    Dim myDomain As String
+    Dim senderAddress As String
+    Dim senderDomain As String
+    Dim i As Long
+
+    ' Ange din e-postadress här
+    myAddress = "din.epost@dindomän.se"
+    myDomain = LCase(Mid(myAddress, InStr(1, myAddress, "@") + 1))
+
+    ' Välj mapp manuellt
+    Set olFolder = Application.Session.PickFolder
+
+    If olFolder Is Nothing Then
+        MsgBox "Ingen mapp vald.", vbExclamation
+        Exit Sub
+    End If
+
+    ' Loopa igenom alla objekt i mappen
+    For i = 1 To olFolder.Items.Count
+        Set olItem = olFolder.Items(i)
+
+        If TypeOf olItem Is Outlook.MailItem Then
+            Set olMail = olItem
+            senderAddress = GetSenderSMTP(olMail)
+            senderDomain = LCase(Mid(senderAddress, InStr(1, senderAddress, "@") + 1))
+
+            If senderDomain = myDomain Then
+                olMail.Categories = "Internt"
+                olMail.Save
+            End If
+        End If
+    Next i
+
+    MsgBox "Färdig! Alla mejl från samma domän har märkts med 'Internt'.", vbInformation
+End Sub
