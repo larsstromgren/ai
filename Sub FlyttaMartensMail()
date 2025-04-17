@@ -1,0 +1,85 @@
+Sub FlyttaMartensMail()
+    Dim olMail As Outlook.MailItem
+    Dim olFolder As Outlook.Folder
+    Dim olItem As Object
+    Dim itemList As Collection
+    Dim senderAddress As String
+    Dim ns As Outlook.NameSpace
+    Dim destFolder As Outlook.Folder
+
+    Dim martensAddress As String
+    martensAddress = "marten.roslund@stockholm.se"
+
+    Set ns = Application.GetNamespace("MAPI")
+
+    ' Välj vilken mapp som ska genomsökas
+    Set olFolder = ns.PickFolder
+    If olFolder Is Nothing Then
+        MsgBox "Ingen mapp vald.", vbExclamation
+        Exit Sub
+    End If
+
+    ' Hämta mappen "Mårten Roslund" under samma konto
+    Set destFolder = GetSiblingFolder(olFolder, "Mårten Roslund")
+    If destFolder Is Nothing Then
+        MsgBox "Kunde inte hitta mappen 'Mårten Roslund' under samma konto.", vbCritical
+        Exit Sub
+    End If
+
+    ' Samla mejl
+    Set itemList = New Collection
+    For Each olItem In olFolder.Items
+        If TypeOf olItem Is Outlook.MailItem Then
+            itemList.Add olItem
+        End If
+    Next
+
+    ' Kontrollera avsändare
+    For Each olMail In itemList
+        senderAddress = GetSenderSMTP(olMail)
+        If LCase(senderAddress) = LCase(martensAddress) Then
+            ' Märk med kategori
+            olMail.Categories = "Mårten Roslund"
+            olMail.Save
+
+            ' Flytta mejlet
+            olMail.Move destFolder
+        End If
+    Next
+
+    MsgBox "Färdigt! Mejlen från Mårten Roslund har flyttats och märkts.", vbInformation
+End Sub
+
+Function GetSenderSMTP(mail As Outlook.MailItem) As String
+    On Error Resume Next
+
+    Dim sender As Outlook.addressEntry
+    Dim exchUser As Outlook.ExchangeUser
+    Dim smtpAddress As String
+
+    Set sender = mail.sender
+
+    If Not sender Is Nothing Then
+        If sender.AddressEntryUserType = olExchangeUserAddressEntry Or _
+           sender.AddressEntryUserType = olExchangeRemoteUserAddressEntry Then
+            Set exchUser = sender.GetExchangeUser
+            If Not exchUser Is Nothing Then
+                smtpAddress = exchUser.PrimarySmtpAddress
+            End If
+        Else
+            smtpAddress = sender.Address
+        End If
+    End If
+
+    GetSenderSMTP = smtpAddress
+End Function
+
+Function GetSiblingFolder(referenceFolder As Outlook.Folder, folderName As String) As Outlook.Folder
+    On Error Resume Next
+
+    ' Gå till kontots rotmapp och hämta mappen därifrån
+    Dim rootFolder As Outlook.Folder
+    Set rootFolder = referenceFolder.Store.GetRootFolder
+
+    Set GetSiblingFolder = rootFolder.Folders(folderName)
+End Function
