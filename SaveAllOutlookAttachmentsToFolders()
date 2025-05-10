@@ -1,0 +1,125 @@
+Option Explicit
+
+Sub SaveAllOutlookAttachmentsToFolders()
+
+    Dim ol As Object
+    Dim ns As Object
+    Dim selectedFolder As Object
+    Dim basePath As String
+    Dim fso As Object
+
+    ' Välj var på datorn du vill spara bilagorna
+    basePath = GetSavePath()
+    If basePath = "" Then
+        MsgBox "Ingen plats valdes. Avbryter."
+        Exit Sub
+    End If
+    If Right(basePath, 1) <> "\" Then basePath = basePath & "\"
+
+    Set fso = CreateObject("Scripting.FileSystemObject")
+    Call EnsureFolderExists(basePath, fso)
+
+    ' Initiera Outlook
+    Set ol = CreateObject("Outlook.Application")
+    Set ns = ol.GetNamespace("MAPI")
+
+    ' Låt användaren välja vilken Outlook-mapp som ska genomsökas
+    Set selectedFolder = ns.PickFolder
+    If selectedFolder Is Nothing Then
+        MsgBox "Ingen Outlook-mapp valdes. Avbryter."
+        Exit Sub
+    End If
+
+    ' Processa vald mapp + undermappar
+    Call ProcessFolder(selectedFolder, basePath, fso)
+
+    MsgBox "Klart! Bilagor sparade i: " & basePath
+
+End Sub
+
+Function GetSavePath() As String
+    Dim sh As Object
+    Set sh = CreateObject("Shell.Application").BrowseForFolder(0, "Välj mapp där bilagor ska sparas", 0)
+    If Not sh Is Nothing Then
+        GetSavePath = sh.Self.Path
+    Else
+        GetSavePath = ""
+    End If
+End Function
+
+Sub ProcessFolder(fol As Object, parentPath As String, fso As Object)
+
+    Dim item As Object
+    Dim mi As Object
+    Dim at As Object
+    Dim cleanName As String
+    Dim datedName As String
+    Dim extensionFolder As String
+    Dim folderPath As String
+    Dim subFol As Object
+    Dim fileExt As String
+    Dim saveFolder As String
+
+    ' Skapa mapp för denna Outlook-mapp
+    folderPath = parentPath & CleanFileName(fol.Name) & "\"
+    Call EnsureFolderExists(folderPath, fso)
+
+    For Each item In fol.Items
+        If item.Class = 43 Then ' olMail
+            Set mi = item
+            If mi.Attachments.Count > 0 Then
+                For Each at In mi.Attachments
+                    fileExt = UCase(fso.GetExtensionName(at.Filename))
+                    If fileExt = "" Then
+                        extensionFolder = "ÖVRIGT"
+                    Else
+                        extensionFolder = fileExt
+                    End If
+
+                    saveFolder = folderPath & extensionFolder & "\"
+                    Call EnsureFolderExists(saveFolder, fso)
+
+                    cleanName = CleanFileName(at.Filename)
+                    If Len(cleanName) > 180 Then cleanName = Left(cleanName, 180)
+                    datedName = Format(mi.ReceivedTime, "yyyy-mm-dd") & " - " & cleanName
+
+                    If Not fso.FileExists(saveFolder & datedName) Then
+                        at.SaveAsFile saveFolder & datedName
+                    End If
+                Next at
+            End If
+        End If
+    Next item
+
+    ' Rekursivt in i undermappar
+    For Each subFol In fol.Folders
+        Call ProcessFolder(subFol, folderPath, fso)
+    Next subFol
+
+End Sub
+
+Function CleanFileName(str As String) As String
+    Dim invalidChars As Variant
+    Dim i As Long
+    invalidChars = Array("\", "/", ":", "*", "?", """", "<", ">", "|")
+    For i = LBound(invalidChars) To UBound(invalidChars)
+        str = Replace(str, invalidChars(i), "_")
+    Next i
+    CleanFileName = str
+End Function
+
+Sub EnsureFolderExists(fullPath As String, fso As Object)
+    Dim parts As Variant
+    Dim path As String
+    Dim i As Long
+    parts = Split(fullPath, "\")
+    path = parts(0)
+    For i = 1 To UBound(parts)
+        path = path & "\" & parts(i)
+        If path <> "" And Not fso.FolderExists(path) Then
+            On Error Resume Next
+            fso.CreateFolder path
+            On Error GoTo 0
+        End If
+    Next i
+End Sub
