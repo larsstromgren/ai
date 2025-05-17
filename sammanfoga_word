@@ -1,0 +1,24 @@
+from docx import Document
+import os
+
+# Ange sökvägen till din mapp med Word-dokument
+folder_path = "/Users/ditt_namn/Sökväg/till/mappen"
+
+# Skapa ett nytt tomt dokument
+combined_doc = Document()
+
+# Hämta alla .docx-filer i mappen
+docx_files = [f for f in os.listdir(folder_path) if f.endswith('.docx')]
+
+# Slå ihop dokumenten
+for filename in sorted(docx_files):
+    file_path = os.path.join(folder_path, filename)
+    doc = Document(file_path)
+    for element in doc.element.body:
+        combined_doc.element.body.append(element)
+    combined_doc.add_page_break()
+
+# Spara det sammanslagna dokumentet
+combined_doc.save(os.path.join(folder_path, "Sammanfogade_dokument.docx"))
+
+print("Färdigt! Filen heter 'Sammanfogade_dokument.docx'")
