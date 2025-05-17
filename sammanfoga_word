@@ -1,24 +1,27 @@
 from docx import Document
 import os
 
-# Ange sökvägen till din mapp med Word-dokument
-folder_path = "/Users/ditt_namn/Sökväg/till/mappen"
+# Ange din mapp här:
+mapp = r"C:\Användare\Lars\Dokument\Wordfiler"
 
-# Skapa ett nytt tomt dokument
-combined_doc = Document()
+# Skapa nytt dokument
+sammanslaget = Document()
 
-# Hämta alla .docx-filer i mappen
-docx_files = [f for f in os.listdir(folder_path) if f.endswith('.docx')]
+# Hämta alla .docx-filer
+filer = sorted([f for f in os.listdir(mapp) if f.endswith('.docx')])
 
-# Slå ihop dokumenten
-for filename in sorted(docx_files):
-    file_path = os.path.join(folder_path, filename)
-    doc = Document(file_path)
-    for element in doc.element.body:
-        combined_doc.element.body.append(element)
-    combined_doc.add_page_break()
+for fil in filer:
+    try:
+        doc = Document(os.path.join(mapp, fil))
+        sammanslaget.add_paragraph(f"--- Innehåll från: {fil} ---", style="Heading 1")
+        
+        for para in doc.paragraphs:
+            sammanslaget.add_paragraph(para.text, style=para.style)
+        
+        sammanslaget.add_page_break()
+    except Exception as e:
+        print(f"Fel vid hantering av {fil}: {e}")
 
-# Spara det sammanslagna dokumentet
-combined_doc.save(os.path.join(folder_path, "Sammanfogade_dokument.docx"))
-
-print("Färdigt! Filen heter 'Sammanfogade_dokument.docx'")
+# Spara det nya dokumentet
+sammanslaget.save(os.path.join(mapp, "Sammanslaget.docx"))
+print("Färdigt! Filen är sparad.")
