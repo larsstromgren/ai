@@ -1,0 +1,26 @@
+from docx import Document
+import os
+
+mapp = r"C:\Användare\Lars\Dokument\Wordfiler"
+sammanslaget = Document()
+filer = sorted([f for f in os.listdir(mapp) if f.endswith('.docx')])
+
+for fil in filer:
+    filepath = os.path.join(mapp, fil)
+    try:
+        doc = Document(filepath)
+        sammanslaget.add_paragraph(f"--- Innehåll från: {fil} ---", style="Heading 1")
+        
+        for para in doc.paragraphs:
+            try:
+                sammanslaget.add_paragraph(para.text, style=para.style.name)
+            except:
+                # Om stilen inte finns, lägg till utan stil
+                sammanslaget.add_paragraph(para.text)
+
+        sammanslaget.add_page_break()
+    except Exception as e:
+        print(f"Fel vid {fil}: {e}")
+
+sammanslaget.save(os.path.join(mapp, "Sammanslaget.docx"))
+print("Färdigt! Dokument sparat.")
