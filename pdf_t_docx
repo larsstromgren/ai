@@ -1,0 +1,55 @@
+from pdf2docx import Converter
+from docx import Document
+import re
+
+# === Steg 1: Konvertera PDF till DOCX ===
+def convert_pdf_to_docx(pdf_path, docx_path):
+    cv = Converter(pdf_path)
+    cv.convert(docx_path, start=0, end=None)
+    cv.close()
+
+# === Steg 2: Redigera DOCX ===
+def edit_docx(docx_path, edited_docx_path):
+    doc = Document(docx_path)
+    pattern_page = re.compile(r"Sida \d+ \(\d+\)")
+    pattern_anf = re.compile(r"Anförande nr \d+")
+
+    new_doc = Document()
+
+    for para in doc.paragraphs:
+        text = para.text.strip()
+
+        # Hoppa över sidorader
+        if pattern_page.fullmatch(text):
+            continue
+
+        # Skapa nytt stycke i nya dokumentet
+        new_para = new_doc.add_paragraph(text)
+
+        # Formatera rubriker
+        if pattern_anf.match(text):
+            run = new_para.runs[0]
+            run.bold = True
+            run.font.size = para.runs[0].font.size  # Behåll originalstorlek om möjligt
+
+            # Alternativt: gör rubriknivå
+            # new_para.style = 'Heading 2'
+
+    new_doc.save(edited_docx_path)
+
+# === Körning ===
+if __name__ == "__main__":
+    # Ange sökvägar
+    pdf_file = 'din_fil.pdf'
+    temp_docx = 'konverterad_fil.docx'
+    final_docx = 'redigerad_fil.docx'
+
+    # 1. Konvertera PDF till DOCX
+    print("Konverterar PDF till DOCX...")
+    convert_pdf_to_docx(pdf_file, temp_docx)
+
+    # 2. Redigera DOCX
+    print("Redigerar DOCX...")
+    edit_docx(temp_docx, final_docx)
+
+    print(f"Färdigt! Din redigerade fil är sparad som {final_docx}")
