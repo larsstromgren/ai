@@ -1,0 +1,78 @@
+import pandas as pd
+
+# === 1. Ange filnamn ===
+huvudkonto_fil = "Handelsbanken_Account_Transactions_2025-08-07.xlsx"
+rakningskonto_fil = "Handelsbanken_Account_Transactions_2025-08-07 (1).xlsx"
+
+# === 2. Läs in båda filerna ===
+huvud_xls = pd.ExcelFile(huvudkonto_fil)
+rakning_xls = pd.ExcelFile(rakningskonto_fil)
+
+# === 3. Hitta rätt tabell (börjar efter rad 8) ===
+df_huvud = huvud_xls.parse(huvud_xls.sheet_names[0], skiprows=8)
+df_rakning = rakning_xls.parse(rakning_xls.sheet_names[0], skiprows=8)
+
+# === 4. Standardisera kolumner ===
+kolumner = ["Reskontradatum", "Transaktionsdatum", "Text", "Belopp", "Saldo"]
+df_huvud.columns = df_rakning.columns = kolumner
+df_huvud["Konto"] = "Huvudkonto"
+df_rakning["Konto"] = "Räkningskonto"
+
+# === 5. Kombinera data ===
+df = pd.concat([df_huvud, df_rakning], ignore_index=True)
+
+# === 6. Rensa och konvertera ===
+df["Text"] = df["Text"].astype(str).str.strip()
+df["Belopp"] = pd.to_numeric(df["Belopp"], errors="coerce")
+df["Datum"] = pd.to_datetime(df["Transaktionsdatum"], errors="coerce")
+
+# === 7. Kategorisera transaktioner ===
+def kategorisera(text):
+    text = text.lower()
+    if "överf" in text:
+        return "Intern överföring"
+    elif "ellevio" in text:
+        return "Elräkning"
+    elif "nextbike" in text or "sj" in text or "s-bahn" in text:
+        return "Transport"
+    elif "spotify" in text or "cyberpor" in text:
+        return "Digitalt"
+    elif "miles" in text:
+        return "Taxi eller bildelning"
+    elif "coop" in text or "ica" in text:
+        return "Dagligvaror"
+    elif "greenpeace" in text or "djurens rätt" in text:
+        return "Medlemskap & Avgifter"
+    else:
+        return "Okategoriserad"
+
+df["Kategori"] = df["Text"].apply(kategorisera)
+
+# === 8. Identifiera och ta bort internöverföringar ===
+df["Matchnyckel"] = df["Text"].str.lower().str.strip() + "_" + df["Belopp"].abs().round(2).astype(str)
+
+# Separera per konto
+df_huvud = df[df["Konto"] == "Huvudkonto"]
+df_rakning = df[df["Konto"] == "Räkningskonto"]
+
+# Hitta matchande rader
+matched_indices = []
+for i, rad in df_huvud.iterrows():
+    kandidat = df_rakning[
+        (df_rakning["Matchnyckel"] == rad["Matchnyckel"]) &
+        (df_rakning["Datum"].sub(rad["Datum"]).abs().dt.days <= 1)
+    ]
+    if not kandidat.empty:
+        matched_indices.extend([i, kandidat.index[0]])
+
+# Ta bort internöverföringar
+df_final = df.drop(index=matched_indices).copy()
+
+# === 9. Välj och sortera kolumner ===
+df_final = df_final[["Datum", "Text", "Belopp", "Kategori", "Konto"]].sort_values("Datum")
+
+# === 10. Spara till ny Excel-fil ===
+output_fil = "Ekonomirapport_båda_konton.xlsx"
+df_final.to_excel(output_fil, index=False)
+
+print(f"✅ Klar! Filen är sparad som: {output_fil}")
