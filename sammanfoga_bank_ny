@@ -1,0 +1,121 @@
+import pandas as pd
+from datetime import datetime
+import os
+from openpyxl import Workbook
+from openpyxl.utils.dataframe import dataframe_to_rows
+from openpyxl.utils import get_column_letter
+
+# === 1. Ange filnamn ===
+huvudkonto_fil = "Handelsbanken_Account_Transactions_2025-08-07.xlsx"
+rakningskonto_fil = "Handelsbanken_Account_Transactions_2025-08-07 (1).xlsx"
+
+# === 2. Läs in båda filerna ===
+huvud_xls = pd.ExcelFile(huvudkonto_fil)
+rakning_xls = pd.ExcelFile(rakningskonto_fil)
+
+# === 3. Hitta rätt tabell (börjar efter rad 8) ===
+df_huvud = huvud_xls.parse(huvud_xls.sheet_names[0], skiprows=8)
+df_rakning = rakning_xls.parse(rakning_xls.sheet_names[0], skiprows=8)
+
+# === 4. Standardisera kolumner ===
+kolumner = ["Reskontradatum", "Transaktionsdatum", "Text", "Belopp", "Saldo"]
+df_huvud.columns = df_rakning.columns = kolumner
+df_huvud["Konto"] = "Huvudkonto"
+df_rakning["Konto"] = "Räkningskonto"
+
+# === 5. Kombinera data ===
+df = pd.concat([df_huvud, df_rakning], ignore_index=True)
+
+# === 6. Rensa och konvertera ===
+df["Text"] = df["Text"].astype(str).str.strip()
+df["Belopp"] = pd.to_numeric(df["Belopp"], errors="coerce")
+df["Datum"] = pd.to_datetime(df["Transaktionsdatum"], errors="coerce")
+
+# === 7. Kategorisera transaktioner ===
+def kategorisera(text):
+    text = text.lower()
+    if "överf" in text:
+        return "Intern överföring"
+    elif "ellevio" in text:
+        return "Elräkning"
+    elif "nextbike" in text or "sj" in text or "s-bahn" in text:
+        return "Transport"
+    elif "spotify" in text or "cyberpor" in text:
+        return "Digitalt"
+    elif "miles" in text:
+        return "Taxi eller bildelning"
+    elif "coop" in text or "ica" in text:
+        return "Dagligvaror"
+    elif "greenpeace" in text or "djurens rätt" in text:
+        return "Medlemskap & Avgifter"
+    else:
+        return "Okategoriserad"
+
+df["Kategori"] = df["Text"].apply(kategorisera)
+
+# === 8. Identifiera och ta bort internöverföringar ===
+df["Matchnyckel"] = df["Text"].str.lower().str.strip() + "_" + df["Belopp"].abs().round(2).astype(str)
+
+df_huvud = df[df["Konto"] == "Huvudkonto"]
+df_rakning = df[df["Konto"] == "Räkningskonto"]
+
+matched_indices = []
+for i, rad in df_huvud.iterrows():
+    kandidat = df_rakning[
+        (df_rakning["Matchnyckel"] == rad["Matchnyckel"]) &
+        (df_rakning["Datum"].sub(rad["Datum"]).abs().dt.days <= 1)
+    ]
+    if not kandidat.empty:
+        matched_indices.extend([i, kandidat.index[0]])
+
+df_final = df.drop(index=matched_indices).copy()
+df_final = df_final[["Datum", "Text", "Belopp", "Kategori", "Konto"]].sort_values("Datum")
+
+# === 9. Versionshanterat filnamn ===
+idag = datetime.now().strftime("%Y-%m-%d")
+basnamn = f"{idag} - Ekonomirapport_båda_konton"
+mapp = "."  # nuvarande mapp
+version = 1
+while True:
+    filnamn = f"{basnamn}_version{version}.xlsx"
+    sökväg = os.path.join(mapp, filnamn)
+    if not os.path.exists(sökväg):
+        break
+    version += 1
+
+# === 10. Skapa Excel med pivottabell och fryst rad ===
+wb = Workbook()
+ws = wb.active
+ws.title = "Transaktioner"
+
+# Lägg till transaktionsdata
+for r in dataframe_to_rows(df_final, index=False, header=True):
+    ws.append(r)
+
+# Frys rubrikraden
+ws.freeze_panes = "A2"
+
+# Autofit kolumnbredd
+for col in ws.columns:
+    max_length = max(len(str(cell.value)) if cell.value else 0 for cell in col)
+    ws.column_dimensions[get_column_letter(col[0].column)].width = max(12, max_length + 2)
+
+# Skapa pivotflik
+ws_pivot = wb.create_sheet("Pivot")
+df_pivot = df_final.copy()
+df_pivot["Månad"] = df_pivot["Datum"].dt.to_period("M").astype(str)
+pivot = df_pivot.pivot_table(index="Kategori", columns="Månad", values="Belopp", aggfunc="sum", fill_value=0)
+
+# Lägg till pivotdata
+for r in dataframe_to_rows(pivot.reset_index(), index=False, header=True):
+    ws_pivot.append(r)
+
+# Autofit pivottabell
+for col in ws_pivot.columns:
+    max_length = max(len(str(cell.value)) if cell.value else 0 for cell in col)
+    ws_pivot.column_dimensions[get_column_letter(col[0].column)].width = max(12, max_length + 2)
+
+# Spara filen
+wb.save(sökväg)
+
+print(f"✅ Klar! Filen är sparad som:\n{sökväg}")
