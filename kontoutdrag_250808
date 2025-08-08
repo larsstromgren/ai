@@ -1,0 +1,133 @@
+import pandas as pd
+from datetime import datetime
+import os
+from openpyxl import Workbook
+from openpyxl.styles import Font, Alignment, numbers
+from openpyxl.utils.dataframe import dataframe_to_rows
+from openpyxl.utils import get_column_letter
+
+# === 1. Ange filnamn ===
+huvudkonto_fil = "Handelsbanken_Account_Transactions_2025-08-07.xlsx"
+rakningskonto_fil = "Handelsbanken_Account_Transactions_2025-08-07 (1).xlsx"
+regler_fil = "kategoriseringsregler.xlsx"
+
+# === 2. Läs in konton ===
+huvud_xls = pd.ExcelFile(huvudkonto_fil)
+rakning_xls = pd.ExcelFile(rakningskonto_fil)
+
+df_huvud = huvud_xls.parse(huvud_xls.sheet_names[0], skiprows=8)
+df_rakning = rakning_xls.parse(rakning_xls.sheet_names[0], skiprows=8)
+
+# === 3. Standardisera kolumner ===
+kolumner = ["Reskontradatum", "Transaktionsdatum", "Text", "Belopp", "Saldo"]
+df_huvud.columns = df_rakning.columns = kolumner
+df_huvud["Konto"] = "Huvudkonto"
+df_rakning["Konto"] = "Räkningskonto"
+
+# === 4. Kombinera och förbered ===
+df = pd.concat([df_huvud, df_rakning], ignore_index=True)
+df["Text"] = df["Text"].astype(str).str.strip()
+df["Belopp"] = pd.to_numeric(df["Belopp"], errors="coerce")
+df["Datum"] = pd.to_datetime(df["Transaktionsdatum"], errors="coerce")
+
+# === 5. Ladda kategoriseringsregler ===
+df_regler = pd.read_excel(regler_fil)
+df_regler["Nyckelord"] = df_regler["Nyckelord"].str.lower().str.strip()
+
+# === 6. Funktion: Kategorisera utifrån regler ===
+def kategorisera(text):
+    text = str(text).lower()
+    for _, rad in df_regler.iterrows():
+        if rad["Nyckelord"] in text:
+            return rad["Kategori"]
+    return "Okategoriserad"
+
+df["Kategori"] = df["Text"].apply(kategorisera)
+
+# === 7. Identifiera internöverföringar ===
+df["Matchnyckel"] = df["Text"].str.lower().str.strip() + "_" + df["Belopp"].abs().round(2).astype(str)
+
+df_huvud = df[df["Konto"] == "Huvudkonto"]
+df_rakning = df[df["Konto"] == "Räkningskonto"]
+
+matched_indices = []
+for i, rad in df_huvud.iterrows():
+    kandidat = df_rakning[
+        (df_rakning["Matchnyckel"] == rad["Matchnyckel"]) &
+        (df_rakning["Datum"].sub(rad["Datum"]).abs().dt.days <= 1)
+    ]
+    if not kandidat.empty:
+        matched_indices.extend([i, kandidat.index[0]])
+
+df_final = df.drop(index=matched_indices).copy()
+df_final = df_final[["Datum", "Text", "Belopp", "Kategori", "Konto"]].sort_values("Datum")
+
+# === 8. Versionshantering av filnamn ===
+idag = datetime.now().strftime("%Y-%m-%d")
+basnamn = f"{idag} - Ekonomirapport_båda_konton"
+mapp = "."
+version = 1
+while True:
+    filnamn = f"{basnamn}_version{version}.xlsx"
+    sökväg = os.path.join(mapp, filnamn)
+    if not os.path.exists(sökväg):
+        break
+    version += 1
+
+# === 9. Skapa Excel-fil ===
+wb = Workbook()
+ws = wb.active
+ws.title = "Transaktioner"
+
+# Fyll i transaktioner
+for r in dataframe_to_rows(df_final, index=False, header=True):
+    ws.append(r)
+
+# Frys rubrikraden
+ws.freeze_panes = "A2"
+
+# Autofit kolumner & formatering
+for col in ws.columns:
+    max_length = max(len(str(cell.value)) if cell.value else 0 for cell in col)
+    col_letter = get_column_letter(col[0].column)
+    ws.column_dimensions[col_letter].width = max(12, max_length + 2)
+
+# Belopp till tusentalsavgränsat heltal
+for row in ws.iter_rows(min_row=2, min_col=3, max_col=3):
+    for cell in row:
+        cell.number_format = "#,##0"
+
+# === 10. Pivottabell ===
+ws_pivot = wb.create_sheet("Pivot")
+df_pivot = df_final.copy()
+df_pivot["Månad"] = df_pivot["Datum"].dt.to_period("M").astype(str)
+pivot = df_pivot.pivot_table(index="Kategori", columns="Månad", values="Belopp", aggfunc="sum", fill_value=0)
+
+# Lägg till totalrad
+pivot.loc["Total per månad"] = pivot.sum(numeric_only=True)
+
+# Skriv till ark
+for r in dataframe_to_rows(pivot.reset_index(), index=False, header=True):
+    ws_pivot.append(r)
+
+# Autofit & fetstil
+for col in ws_pivot.columns:
+    col_letter = get_column_letter(col[0].column)
+    max_length = max(len(str(cell.value)) if cell.value else 0 for cell in col)
+    ws_pivot.column_dimensions[col_letter].width = max(12, max_length + 2)
+    for i, cell in enumerate(col, start=1):
+        if i == 1 or cell.row == 1:
+            cell.font = Font(bold=True)
+        if cell.row >= 2 and cell.column > 1:
+            cell.number_format = "#,##0"
+
+# === 11. Spara fil ===
+wb.save(sökväg)
+print(f"✅ Klar! Filen är sparad som:\n{sökväg}")
+
+# === 12. Logga okategoriserade transaktioner ===
+df_okategoriserade = df[df["Kategori"] == "Okategoriserad"].copy()
+if not df_okategoriserade.empty:
+    logg_filnamn = f"okategoriserade_transaktioner_{idag}.xlsx"
+    df_okategoriserade.to_excel(logg_filnamn, index=False)
+    print(f"⚠️ {len(df_okategoriserade)} okategoriserade transaktioner sparades i:\n{logg_filnamn}")
