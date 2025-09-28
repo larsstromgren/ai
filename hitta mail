@@ -1,0 +1,129 @@
+' ===== Outlook 2016: Exportera mejl + avsändarens SMTP till CSV =====
+Option Explicit
+
+Private Const PR_SMTP_ADDRESS As String = "http://schemas.microsoft.com/mapi/proptag/0x39FE001E"
+
+Public Sub Export_All_Mail_Senders_To_CSV()
+    Dim rootFld As Outlook.Folder
+    Dim fpath As String, ff As Integer
+    
+    ' Välj rotmapp (t.ex. hela kontot eller Inbox)
+    Set rootFld = Application.Session.PickFolder
+    If rootFld Is Nothing Then Exit Sub
+    
+    ' Spara på Skrivbordet
+' Spara direkt i din användarmapp
+fpath = "C:\Users\ah43886\Outlook_Senders.csv"
+ff = FreeFile
+Open fpath For Output As #ff
+
+    
+    ' Rubriker
+    Print #ff, "EntryID,ReceivedTime,FolderPath,SenderName,SenderSMTP,Subject,To,CC"
+    
+    Application.ScreenUpdating = False
+    ProcessFolder rootFld, ff
+    Application.ScreenUpdating = True
+    
+    Close #ff
+    MsgBox "Klar! Fil skapad: " & fpath, vbInformation
+End Sub
+
+Private Sub ProcessFolder(ByVal fld As Outlook.Folder, ByVal ff As Integer)
+    Dim it As Object, mi As Outlook.MailItem
+    Dim i As Long, subFld As Outlook.Folder
+    
+    ' Sortera kan påskynda i stora mappar
+    On Error Resume Next
+    fld.Items.Sort "[ReceivedTime]", True
+    On Error GoTo 0
+    
+    For Each it In fld.Items
+        If TypeOf it Is Outlook.MailItem Then
+            Set mi = it
+            WriteMailRow mi, fld, ff
+        End If
+    Next it
+    
+    For Each subFld In fld.Folders
+        ProcessFolder subFld, ff
+    Next subFld
+End Sub
+
+Private Sub WriteMailRow(mi As Outlook.MailItem, fld As Outlook.Folder, ByVal ff As Integer)
+    Dim senderName As String, senderSMTP As String
+    Dim subj As String, toStr As String, ccStr As String
+    Dim recTime As String, fpath As String
+    
+    senderName = Nz(mi.senderName)
+    senderSMTP = GetSenderSMTP(mi)
+    subj = CleanCSV(Nz(mi.Subject))
+    toStr = CleanCSV(Nz(mi.To))
+    ccStr = CleanCSV(Nz(mi.CC))
+    recTime = Format$(mi.ReceivedTime, "yyyy-mm-dd HH:nn:ss")
+    fpath = CleanCSV(FolderPathFull(fld))
+    
+    Print #ff, _
+        mi.EntryID & "," & _
+        recTime & "," & _
+        fpath & "," & _
+        CleanCSV(senderName) & "," & _
+        CleanCSV(senderSMTP) & "," & _
+        subj & "," & _
+        toStr & "," & _
+        ccStr
+End Sub
+
+Private Function GetSenderSMTP(mi As Outlook.MailItem) As String
+    On Error GoTo fallback
+    If mi.SenderEmailType = "EX" Then
+        ' Exchange: hämta riktig SMTP via PropertyAccessor
+        GetSenderSMTP = mi.PropertyAccessor.GetProperty(PR_SMTP_ADDRESS)
+        If Len(GetSenderSMTP) > 0 Then Exit Function
+    End If
+fallback:
+    ' Annars: använd fältet som finns
+    GetSenderSMTP = Nz(mi.SenderEmailAddress)
+End Function
+
+Private Function FolderPathFull(fld As Outlook.Folder) As String
+    ' Returnerar full sökväg: Konto\Inkorg\Undermapp\...
+    Dim p As Outlook.Folder, parts As Collection, s As String
+    Set parts = New Collection
+    Set p = fld
+    Do While Not p Is Nothing
+        parts.Add p.Name
+        On Error Resume Next
+        Set p = p.Parent
+        On Error GoTo 0
+        If p Is Nothing Then Exit Do
+        If TypeName(p) = "NameSpace" Then Exit Do
+    Loop
+    Dim i As Long
+    For i = parts.Count To 1 Step -1
+        s = s & IIf(Len(s) = 0, parts(i), "\" & parts(i))
+    Next i
+    FolderPathFull = s
+End Function
+
+Private Function CleanCSV(ByVal s As String) As String
+    ' Citerar och ersätter radbrytningar
+    s = Replace(s, """", "'")
+    s = Replace(s, vbCrLf, " ")
+    s = Replace(s, vbCr, " ")
+    s = Replace(s, vbLf, " ")
+    If InStr(s, ",") > 0 Or InStr(s, """") > 0 Then
+        s = """" & s & """"
+    End If
+    CleanCSV = s
+End Function
+
+Private Function Nz(v) As String
+    If IsNull(v) Or IsEmpty(v) Then
+        Nz = ""
+    Else
+        Nz = CStr(v)
+    End If
+End Function
+
+
