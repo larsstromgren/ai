@@ -1,0 +1,204 @@
+import win32com.client as win32
+import os, csv, datetime, sys
+
+# ==== KONFIG ====
+OUT_DIR = r"C:\Users\ah43886\Documents\Outlook_Exports"
+TARGET_SMTP = ""  # sätt t.ex. "ditt.namn@din-domän.se" om du vill tvinga en specifik brevlåda, annars lämna tomt
+START_YEAR = 1990  # tidigt startår; scriptet loopar till innevarande år
+INCLUDE_SENT = False  # True om du även vill ta med mappar under "Sent Items"
+
+PR_SMTP = "http://schemas.microsoft.com/mapi/proptag/0x39FE001E"
+
+# ==== HJÄLPARE ====
+def ensure_dir(p):
+    os.makedirs(p, exist_ok=True)
+
+def ts():
+    return datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+
+def folder_path(f):
+    parts = []
+    while f is not None and f.__class__.__name__ == "MAPIFolder":
+        parts.append(f.Name)
+        f = f.Parent
+    return "\\".join(reversed(parts))
+
+def is_descendant_of(child, ancestor):
+    p = child
+    while p is not None and p.__class__.__name__ == "MAPIFolder":
+        if p.EntryID == ancestor.EntryID:
+            return True
+        p = p.Parent
+    return False
+
+def excluded_folder(folder, session):
+    ns = session
+    # Standardmappar
+    sent     = ns.GetDefaultFolder(5)   # Sent Items
+    outbox   = ns.GetDefaultFolder(4)   # Outbox
+    drafts   = ns.GetDefaultFolder(16)  # Drafts
+    junk     = ns.GetDefaultFolder(23)  # Junk
+    deleted  = ns.GetDefaultFolder(3)   # Deleted Items
+
+    # Exkludera alltid Outbox/Drafts/Junk/Deleted
+    for ex in [outbox, drafts, junk, deleted]:
+        if ex is not None and is_descendant_of(folder, ex):
+            return True
+
+    # Sent: exkludera om inte INCLUDE_SENT
+    if not INCLUDE_SENT and sent is not None and is_descendant_of(folder, sent):
+        return True
+
+    return False
+
+def safe_get_row(rw, name, default=""):
+    try:
+        return rw.Item(name)
+    except Exception:
+        try:
+            return getattr(rw, name)
+        except Exception:
+            return default
+
+def write_from_table(tbl, folder, writer):
+    # Minimera kolumner (tål att PR_SMTP saknas)
+    try:
+        tbl.Columns.RemoveAll()
+    except Exception:
+        pass
+    for col in ["EntryID", "ReceivedTime", "Subject", "SenderName", "SenderEmailAddress", "To", "CC"]:
+        try:
+            tbl.Columns.Add(col)
+        except Exception:
+            pass
+    try:
+        tbl.Columns.Add(PR_SMTP)
+    except Exception:
+        pass
+
+    n = 0
+    while not tbl.EndOfTable:
+        rw = tbl.GetNextRow()
+        eid   = safe_get_row(rw, "EntryID", "")
+        rec   = safe_get_row(rw, "ReceivedTime", "")
+        subj  = safe_get_row(rw, "Subject", "")
+        sname = safe_get_row(rw, "SenderName", "")
+        sSMTP = safe_get_row(rw, PR_SMTP, "") or safe_get_row(rw, "SenderEmailAddress", "")
+        to_s  = safe_get_row(rw, "To", "")
+        cc_s  = safe_get_row(rw, "CC", "")
+        writer.writerow([eid, rec, folder_path(folder), sname, sSMTP, subj, to_s, cc_s])
+        n += 1
+    return n
+
+def process_folder(folder, writer, d0, d1, session):
+    if excluded_folder(folder, session):
+        return 0
+
+    filt = f"[ReceivedTime] >= '{d0:%m/%d/%Y} 12:00 AM' AND [ReceivedTime] < '{d1:%m/%d/%Y} 12:00 AM'"
+    wrote = 0
+
+    # 1) Folder.GetTable
+    try:
+        tbl = folder.GetTable(filt)
+    except Exception:
+        tbl = None
+    if tbl is not None:
+        wrote += write_from_table(tbl, folder, writer)
+    else:
+        # 2) Items.GetTable
+        try:
+            its = folder.Items
+            tbl = its.GetTable(filt)
+            wrote += write_from_table(tbl, folder, writer)
+        except Exception:
+            # 3) Restrict fallback
+            try:
+                its = folder.Items
+                its.Sort("[ReceivedTime]", True)
+                rIts = its.Restrict(filt)
+                for it in rIts:
+                    # 43 = olMail
+                    if getattr(it, "Class", 0) == 43:
+                        try:
+                            sSMTP = it.PropertyAccessor.GetProperty(PR_SMTP) or it.SenderEmailAddress
+                        except Exception:
+                            sSMTP = it.SenderEmailAddress
+                        writer.writerow([
+                            it.EntryID,
+                            it.ReceivedTime,
+                            folder_path(folder),
+                            it.SenderName or "",
+                            sSMTP or "",
+                            it.Subject or "",
+                            it.To or "",
+                            it.CC or ""
+                        ])
+                        wrote += 1
+            except Exception:
+                pass
+
+    # Rekursion
+    for sub in folder.Folders:
+        wrote += process_folder(sub, writer, d0, d1, session)
+    return wrote
+
+def process_store(store, writer, session):
+    root = store.GetRootFolder()
+    total = 0
+    now = datetime.datetime.now()
+    end_year = now.year
+    # Loopa år/månad från START_YEAR till idag
+    for year in range(START_YEAR, end_year + 1):
+        for month in range(1, 13):
+            d0 = datetime.datetime(year, month, 1)
+            d1 = (d0 + datetime.timedelta(days=32)).replace(day=1)
+            if d0 > now:
+                break
+            print(f"  {store.DisplayName}  {year}-{month:02d} …", end="\r")
+            total += process_folder(root, writer, d0, d1, session)
+    print()  # ny rad efter progress
+    return total
+
+def pick_store_by_smtp(session, smtp_lower):
+    for acc in session.Accounts:
+        try:
+            if acc.SmtpAddress and acc.SmtpAddress.lower() == smtp_lower:
+                return acc.DeliveryStore
+        except Exception:
+            pass
+    return None
+
+# ==== HUVUD ====
+def main():
+    ensure_dir(OUT_DIR)
+    csv_path = os.path.join(OUT_DIR, f"Outlook_Export_ALL_{ts()}.csv")
+
+    ol = win32.gencache.EnsureDispatch("Outlook.Application")
+    session = ol.Session
+
+    if TARGET_SMTP:
+        st = pick_store_by_smtp(session, TARGET_SMTP.lower())
+        if st is None:
+            print(f"Hittade ingen store för {TARGET_SMTP}. Använder DefaultStore i stället.")
+            st = session.DefaultStore
+        stores = [st]
+    else:
+        # din personliga brevlåda (DefaultStore)
+        stores = [session.DefaultStore]
+
+    total = 0
+    with open(csv_path, "w", newline="", encoding="utf-8") as f:
+        w = csv.writer(f)
+        w.writerow(["EntryID","ReceivedTime","FolderPath","SenderName","SenderSMTP","Subject","To","CC"])
+        for st in stores:
+            print(f"Export från: {st.DisplayName}")
+            total += process_store(st, w, session)
+
+    print(f"Klar. Skrev {total} rader till {csv_path}")
+
+if __name__ == "__main__":
+    try:
+        main()
+    except KeyboardInterrupt:
+        print("\nAvbrutet.")
+        sys.exit(1)
