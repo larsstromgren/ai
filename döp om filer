@@ -1,0 +1,123 @@
+# rename_kf_docs.py
+from pathlib import Path
+import re
+import pandas as pd
+from datetime import date as _date
+
+# === Inställningar ===
+ROOT   = Path(".")    # byt till din mapp om du inte kör i samma
+COMMIT = False        # True = genomför omdöpning, False = bara förhandsvisning (DRY-RUN)
+RECURSIVE = False     # True = genomsök undermappar också
+INCLUDE_DOC = False   # True = inkludera även .doc (utöver .docx)
+
+# === Filtyper ===
+DOC_EXTS = {".docx"}
+if INCLUDE_DOC:
+    DOC_EXTS.add(".doc")
+
+# === Datum-mönster ===
+# Fullt år (YYYY...) med "-", "_", ".", eller mellanslag som avskiljare: 2024-11-18, 2024_11_18, 20241118, 2024 11 18
+date_rx_full = re.compile(r'(?P<y>20\d{2})[-_. ]?(?P<m>\d{2})[-_. ]?(?P<d>\d{2})')
+# Kortår (YYMMDD), t.ex. 220613 -> 2022-06-13
+date_rx_short = re.compile(r'(?P<y>\d{2})(?P<m>\d{2})(?P<d>\d{2})')
+
+def extract_date(fname: str):
+    """Returnerar (YYYY-MM-DD, (start, end)) eller (None, None) om inget datum hittas."""
+    m = date_rx_full.search(fname)
+    if m:
+        y, mth, d = m.group("y"), m.group("m"), m.group("d")
+        span = m.span()
+    else:
+        m2 = date_rx_short.search(fname)
+        if not m2:
+            return None, None
+        y, mth, d = m2.group("y"), m2.group("m"), m2.group("d")
+        y = "20" + y  # anta 20xx för YY
+        span = m2.span()
+
+    # Validera datum
+    try:
+        _ = _date(int(y), int(mth), int(d))
+    except Exception:
+        return None, None
+    return f"{y}-{mth}-{d}", span
+
+def clean_rest(original_name: str, span, suffix: str):
+    """Tar bort datumbiten ur namnet och städar upp resten."""
+    start, end = span
+    no_date = original_name[:start] + original_name[end:]
+    rest = re.sub(re.escape(suffix) + r'$', '', no_date, flags=re.IGNORECASE)  # ta bort ext
+    rest = rest.replace('_', ' ')
+    rest = re.sub(r'\s*-\s*', ' - ', rest)     # normalisera bindestreck
+    rest = re.sub(r'\s{2,}', ' ', rest)        # flera mellanslag -> ett
+    rest = rest.strip(" -_.\u00A0")            # trimma vanliga separators + non-breaking space
+    return rest or "KF"
+
+def propose_new_name(p: Path):
+    """Returnerar (nytt_filnamn, status). Om inget att göra: (None, status)."""
+    date_str, span = extract_date(p.name)
+    if not date_str:
+        return None, "no_date_found"
+
+    rest = clean_rest(p.name, span, p.suffix)
+    base = f"{date_str} - {rest}"
+    new_name = base + p.suffix.lower()
+    target = p.with_name(new_name)
+
+    if target == p:
+        return None, "already_standard"
+
+    # Hantera kollisioner
+    n = 2
+    while target.exists():
+        target = p.with_name(f"{base} ({n}){p.suffix.lower()}")
+        n += 1
+    return target.name, "ok"
+
+def iter_files(root: Path):
+    if RECURSIVE:
+        yield from (f for f in root.rglob("*") if f.is_file() and f.suffix.lower() in DOC_EXTS)
+    else:
+        yield from (f for f in root.iterdir() if f.is_file() and f.suffix.lower() in DOC_EXTS)
+
+def plan(root: Path):
+    rows = []
+    for f in iter_files(root):
+        new_name, status = propose_new_name(f)
+        rows.append({
+            "folder": str(f.parent),
+            "current_name": f.name,
+            "proposed_new_name": new_name if new_name else f.name,
+            "action": "rename" if new_name else "skip",
+            "status": status
+        })
+    df = pd.DataFrame(rows, columns=["folder","current_name","proposed_new_name","action","status"])
+    if not df.empty:
+        df = df.sort_values(["action","folder","current_name"]).reset_index(drop=True)
+    return df
+
+def apply(df, root: Path):
+    for _, r in df.iterrows():
+        if r["action"] == "rename":
+            src = Path(r["folder"]) / r["current_name"]
+            dst = Path(r["folder"]) / r["proposed_new_name"]
+            if src.exists():
+                src.rename(dst)
+
+if __name__ == "__main__":
+    df = plan(ROOT)
+    print("=== DRY-RUN (inget ändras) ===")
+    if df.empty:
+        print(f"Inga filer med {DOC_EXTS} hittades i: {ROOT.resolve()}")
+    else:
+        print(df.to_string(index=False))
+        # Spara plan till CSV för översikt
+        out_csv = ROOT / "rename_plan.csv"
+        df.to_csv(out_csv, index=False, encoding="utf-8")
+        print(f"\nPlan sparad till: {out_csv}")
+
+    if COMMIT and not df.empty:
+        apply(df, ROOT)
+        print("\nOmdöpning genomförd.")
+    elif not COMMIT:
+        print("\nTips: sätt COMMIT=True för att genomföra omdöpningen.")
