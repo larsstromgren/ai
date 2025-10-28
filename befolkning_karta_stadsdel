@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Stockholms invånarantal 2024</title>
+  <!-- Vi laddar INTE D3 här med SRI (integrity) eftersom fel hash kan blockera scriptet.
+       I stället laddas D3 säkert via en fallback-loader i slutet av <body>. -->
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      padding: 20px; min-height: 100vh;
+    }
+
+    .container {
+      max-width: 1400px; margin: 0 auto; background: white; border-radius: 20px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.3); padding: 30px;
+    }
+
+    h1 { color: #2d3748; margin-bottom: 10px; font-size: 2.5em; }
+    .subtitle { color: #4a5568; margin-bottom: 5px; font-size: 1.1em; }
+    .subtitle strong { color: #667eea; }
+    .source { color: #718096; font-size: 0.9em; margin-bottom: 10px; }
+
+    #status { color: #2d3748; font-size: 0.95em; margin-bottom: 25px; }
+
+    #map-container {
+      width: 100%; height: 700px; background: #f7fafc; border-radius: 12px;
+      border: 3px solid #e2e8f0; position: relative; overflow: hidden;
+    }
+
+    @media (max-width: 900px) { #map-container { height: 60vh; } }
+    @media (max-width: 600px) { #map-container { height: 55vh; } }
+
+    .district { stroke: #2d3748; stroke-width: 1.5; cursor: pointer; transition: all 0.25s; }
+    .district:hover, .district:focus { stroke: #000; stroke-width: 2.5; filter: brightness(1.1); outline: none; }
+
+    .district-label {
+      font-size: 11px; font-weight: 600; fill: #2d3748; pointer-events: none; text-anchor: middle;
+      text-shadow: -1px -1px 0 #fff, 1px -1px 0 #fff, -1px 1px 0 #fff, 1px 1px 0 #fff, 0 0 3px #fff;
+    }
+
+    .tooltip {
+      position: absolute; background: rgba(0,0,0,0.9); color: white; padding: 12px 16px;
+      border-radius: 8px; font-size: 14px; pointer-events: none; opacity: 0; transition: opacity 0.2s; z-index: 1000;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    }
+    .tooltip.visible { opacity: 1; }
+    .tooltip-title { font-weight: bold; font-size: 16px; margin-bottom: 6px; }
+    .tooltip-pop { color: #60d394; font-size: 18px; font-weight: bold; }
+
+    .legend {
+      position: absolute; bottom: 20px; right: 20px; background: white; padding: 15px; border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.15); min-width: 180px;
+    }
+    .legend-title { font-weight: bold; margin-bottom: 8px; color: #2d3748; }
+    .legend-item { display: flex; align-items: center; margin: 4px 0; font-size: 12px; }
+    .legend-color { width: 30px; height: 15px; margin-right: 8px; border-radius: 3px; border: 1px solid #cbd5e0; }
+
+    .info-box { background: #edf2f7; padding: 20px; border-radius: 12px; margin-top: 20px; }
+    .info-box h3 { color: #2d3748; margin-bottom: 12px; }
+    .info-box ul { list-style: none; color: #4a5568; }
+    .info-box li { padding: 6px 0; border-bottom: 1px solid #cbd5e0; }
+    .info-box li:last-child { border-bottom: none; }
+
+    .loading { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 18px; color: #4a5568; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>📍 Stockholms invånarantal 2024</h1>
+    <div class="subtitle">Total befolkning: <strong id="totalPop">–</strong> invånare</div>
+    <div class="source">Data per 31 december 2024 | Källa: Stockholms stad</div>
+    <div id="status" aria-live="polite">Initierar…</div>
+
+    <div id="map-container">
+      <div class="loading">Laddar karta...</div>
+      <svg id="map" role="img" aria-label="Karta över Stockholms stadsdelsområden med färg efter invånarantal"></svg>
+      <div class="legend" aria-hidden="true">
+        <div class="legend-title">Invånarantal</div>
+        <div class="legend-items"></div>
+      </div>
+    </div>
+    <div class="tooltip" aria-hidden="true"></div>
+
+    <div class="info-box">
+      <h3>Fakta om Stockholms befolkning 2024</h3>
+      <ul>
+        <li>• Stockholm växte med 6 631 invånare under 2024, en ökning på 0,7%.</li>
+        <li>• 8 av 11 stadsdelsområden ökade i befolkning.</li>
+        <li>• Störst folkökning: Järva (+2 561) och Hägersten-Älvsjö (+1 694).</li>
+        <li>• Norra innerstaden är störst med 155 286 invånare.</li>
+        <li>• Skärholmen är minst med 38 112 invånare.</li>
+      </ul>
+    </div>
+  </div>
+
+  <noscript>
+    <p style="max-width: 1400px; margin: 1rem auto; background:#fff3cd; color:#856404; padding:1rem; border-radius:12px;">
+      Den här sidan kräver JavaScript för att fungera. Aktivera JavaScript i din webbläsare.
+    </p>
+  </noscript>
+
+  <script>
+    // --- Data (oförändrat) ---
+    const populationData = {
+      'Norra innerstaden': 155286,
+      'Södermalm': 130402,
+      'Hägersten-Älvsjö': 128794,
+      'Enskede-Årsta-Vantör': 105189,
+      'Bromma': 76823,
+      'Kungsholmen': 68496,
+      'Farsta': 60577,
+      'Hässelby-Vällingby': 82173,
+      'Skarpnäck': 47217,
+      'Järva': 63501,
+      'Skärholmen': 38112
+    };
+
+    const geojson = {
+      "type": "FeatureCollection",
+      "features": [
+        { "type": "Feature", "properties": {"name": "Norra innerstaden"}, "geometry": { "type": "Polygon", "coordinates": [[[18.00,59.35],[18.06,59.35],[18.09,59.33],[18.10,59.31],[18.07,59.30],[18.03,59.31],[17.98,59.33],[18.00,59.35]]] } },
+        { "type": "Feature", "properties": {"name": "Södermalm"}, "geometry": { "type": "Polygon", "coordinates": [[[18.02,59.31],[18.08,59.31],[18.10,59.29],[18.08,59.28],[18.02,59.29],[17.99,59.30],[18.02,59.31]]] } },
+        { "type": "Feature", "properties": {"name": "Kungsholmen"}, "geometry": { "type": "Polygon", "coordinates": [[[17.97,59.33],[18.02,59.34],[18.02,59.32],[17.99,59.31],[17.95,59.32],[17.97,59.33]]] } },
+        { "type": "Feature", "properties": {"name": "Bromma"}, "geometry": { "type": "Polygon", "coordinates": [[[17.85,59.35],[17.95,59.36],[17.97,59.33],[17.94,59.31],[17.87,59.32],[17.85,59.35]]] } },
+        { "type": "Feature", "properties": {"name": "Hässelby-Vällingby"}, "geometry": { "type": "Polygon", "coordinates": [[[17.75,59.38],[17.85,59.39],[17.88,59.36],[17.86,59.33],[17.78,59.32],[17.73,59.35],[17.75,59.38]]] } },
+        { "type": "Feature", "properties": {"name": "Järva"}, "geometry": { "type": "Polygon", "coordinates": [[[17.90,59.40],[17.98,59.41],[18.02,59.38],[17.98,59.36],[17.92,59.37],[17.90,59.40]]] } },
+        { "type": "Feature", "properties": {"name": "Hägersten-Älvsjö"}, "geometry": { "type": "Polygon", "coordinates": [[[17.93,59.30],[18.00,59.30],[18.00,59.27],[17.96,59.26],[17.90,59.27],[17.93,59.30]]] } },
+        { "type": "Feature", "properties": {"name": "Enskede-Årsta-Vantör"}, "geometry": { "type": "Polygon", "coordinates": [[[18.03,59.29],[18.10,59.28],[18.10,59.25],[18.06,59.24],[18.00,59.25],[18.03,59.29]]] } },
+        { "type": "Feature", "properties": {"name": "Skärholmen"}, "geometry": { "type": "Polygon", "coordinates": [[[17.85,59.28],[17.92,59.28],[17.92,59.25],[17.87,59.24],[17.83,59.26],[17.85,59.28]]] } },
+        { "type": "Feature", "properties": {"name": "Farsta"}, "geometry": { "type": "Polygon", "coordinates": [[[18.08,59.24],[18.15,59.24],[18.15,59.21],[18.10,59.20],[18.06,59.22],[18.08,59.24]]] } },
+        { "type": "Feature", "properties": {"name": "Skarpnäck"}, "geometry": { "type": "Polygon", "coordinates": [[[18.11,59.27],[18.17,59.27],[18.17,59.24],[18.13,59.23],[18.10,59.25],[18.11,59.27]]] } }
+      ]
+    };
+
+    const bins = [
+      { label: 'Under 50\u00A0000', threshold: 50000, color: '#fee5d9' },
+      { label: '50\u00A0000 – 80\u00A0000', threshold: 80000, color: '#fcae91' },
+      { label: '80\u00A0000 – 120\u00A0000', threshold: 120000, color: '#fb6a4a' },
+      { label: '120\u00A0000 – 150\u00A0000', threshold: 150000, color: '#de2d26' },
+      { label: 'Över 150\u00A0000', threshold: Infinity, color: '#a50f15' }
+    ];
+
+    function getColor(pop) {
+      if (pop > 150000) return '#a50f15';
+      if (pop > 120000) return '#de2d26';
+      if (pop > 80000) return '#fb6a4a';
+      if (pop > 50000) return '#fcae91';
+      return '#fee5d9';
+    }
+
+    // --- Robust D3-loader med fallbacks ---
+    const D3_SOURCES = [
+      'https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js',
+      'https://cdn.jsdelivr.net/npm/d3@7.8.5/dist/d3.min.js',
+      'https://unpkg.com/d3@7.8.5/dist/d3.min.js'
+    ];
+
+    function loadScriptSequentially(urls) {
+      return new Promise((resolve, reject) => {
+        const tryLoad = (i) => {
+          if (i >= urls.length) {
+            reject(new Error('Kunde inte ladda D3 från tillgängliga CDN:er'));
+            return;
+          }
+          const s = document.createElement('script');
+          s.src = urls[i];
+          s.async = false; // bevara ordning
+          s.onload = () => resolve(window.d3);
+          s.onerror = () => {
+            console.warn('Misslyckades att ladda:', urls[i]);
+            tryLoad(i + 1);
+          };
+          document.head.appendChild(s);
+        };
+        if (window.d3) { resolve(window.d3); } else { tryLoad(0); }
+      });
+    }
+
+    // --- Init ---
+    const statusEl = document.getElementById('status');
+
+    loadScriptSequentially(D3_SOURCES)
+      .then(() => {
+        statusEl.textContent = '✅ D3 laddad. Renderar karta…';
+        initMap();
+      })
+      .catch(err => {
+        console.error(err);
+        statusEl.textContent = '❌ Fel: Kunde inte ladda D3. Kontrollera internetåtkomst eller CSP.';
+      });
+
+    // --- Huvudlogik (körs efter att D3 finns) ---
+    function initMap() {
+      try {
+        // Skriv totalsumma i underraden
+        const total = Object.values(populationData).reduce((a,b) => a + b, 0);
+        document.getElementById('totalPop').textContent = total.toLocaleString('sv-SE');
+
+        const container = document.getElementById('map-container');
+        const svg = d3.select('#map');
+        const g = svg.append('g'); // lager för karta + etiketter
+        const tooltip = d3.select('.tooltip');
+
+        // Generera legend dynamiskt
+        const legendSel = d3.select('.legend .legend-items');
+        legendSel.selectAll('.legend-item')
+          .data(bins)
+          .enter()
+          .append('div')
+          .attr('class', 'legend-item')
+          .html(d => `<div class="legend-color" style="background:${d.color}"></div><span>${d.label}</span>`);
+
+        // Ta bort laddningsmeddelande när vi ritar
+        d3.select('.loading').remove();
+
+        function render() {
+          const width = container.clientWidth;
+          const height = container.clientHeight;
+          svg.attr('width', width).attr('height', height);
+
+          // Projektion och path anpassad till behållarens storlek
+          const projection = d3.geoMercator().fitSize([width, height], geojson
