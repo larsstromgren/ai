@@ -1,0 +1,215 @@
+import React, { useState } from 'react';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
+
+const StockholmPopulationMap = () => {
+  const [view, setView] = useState('map');
+  
+  // Officiell data från Befolkningsöversikt 2024 (31 december 2024)
+  const districts = [
+    { name: 'Norra innerstaden', population: 155286, color: '#4ECDC4', x: 55, y: 42 },
+    { name: 'Södermalm', population: 130402, color: '#FF6B6B', x: 52, y: 58 },
+    { name: 'Hägersten-Älvsjö', population: 128794, color: '#00B894', x: 40, y: 65 },
+    { name: 'Enskede-Årsta-Vantör', population: 105189, color: '#A29BFE', x: 60, y: 70 },
+    { name: 'Bromma', population: 76823, color: '#FFEAA7', x: 25, y: 38 },
+    { name: 'Kungsholmen', population: 68496, color: '#96CEB4', x: 42, y: 45 },
+    { name: 'Farsta', population: 60577, color: '#FDCB6E', x: 68, y: 78 },
+    { name: 'Hässelby-Vällingby', population: 82173, color: '#DFE6E9', x: 18, y: 48 },
+    { name: 'Skarpnäck', population: 47217, color: '#FD79A8', x: 75, y: 72 },
+    { name: 'Järva', population: 63501, color: '#74B9FF', x: 32, y: 22 },
+    { name: 'Skärholmen', population: 38112, color: '#E17055', x: 28, y: 72 }
+  ];
+
+  const totalPopulation = 995574; // Officiell siffra per 31 dec 2024
+
+  const [hoveredDistrict, setHoveredDistrict] = useState(null);
+
+  return (
+    <div className="w-full min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4 md:p-8">
+      <div className="max-w-7xl mx-auto bg-white rounded-2xl shadow-2xl p-4 md:p-8">
+        <div className="mb-6">
+          <h1 className="text-3xl md:text-4xl font-bold text-gray-800 mb-2">
+            Stockholm - Invånarantal 2024
+          </h1>
+          <p className="text-base md:text-lg text-gray-600 mb-1">
+            Total befolkning: <span className="font-bold text-blue-600">{totalPopulation.toLocaleString('sv-SE')}</span> invånare
+          </p>
+          <p className="text-sm text-gray-500">Data per 31 december 2024 (Källa: Stockholms stad)</p>
+        </div>
+
+        <div className="flex flex-wrap gap-3 mb-6">
+          <button
+            onClick={() => setView('map')}
+            className={`px-4 md:px-6 py-2 rounded-lg font-semibold transition-all text-sm md:text-base ${
+              view === 'map' 
+                ? 'bg-blue-600 text-white shadow-lg' 
+                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+            }`}
+          >
+            Karta
+          </button>
+          <button
+            onClick={() => setView('bar')}
+            className={`px-4 md:px-6 py-2 rounded-lg font-semibold transition-all text-sm md:text-base ${
+              view === 'bar' 
+                ? 'bg-blue-600 text-white shadow-lg' 
+                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+            }`}
+          >
+            Stapeldiagram
+          </button>
+          <button
+            onClick={() => setView('pie')}
+            className={`px-4 md:px-6 py-2 rounded-lg font-semibold transition-all text-sm md:text-base ${
+              view === 'pie' 
+                ? 'bg-blue-600 text-white shadow-lg' 
+                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+            }`}
+          >
+            Cirkeldiagram
+          </button>
+        </div>
+
+        <div className="w-full" style={{ height: '600px' }}>
+          {view === 'map' && (
+            <div className="relative w-full h-full bg-gradient-to-br from-blue-100 via-blue-50 to-green-50 rounded-xl border-4 border-blue-300 overflow-hidden">
+              <svg viewBox="0 0 100 100" className="w-full h-full" preserveAspectRatio="xMidYMid meet">
+                {/* Vattenyta (symbolisk representation av Mälaren) */}
+                <ellipse cx="15" cy="55" rx="8" ry="12" fill="#B8E6F7" opacity="0.4" />
+                <ellipse cx="50" cy="50" rx="35" ry="30" fill="#B8E6F7" opacity="0.2" />
+                
+                {districts.map((district, idx) => (
+                  <g key={idx}>
+                    <circle
+                      cx={district.x}
+                      cy={district.y}
+                      r={Math.sqrt(district.population / 2500)}
+                      fill={district.color}
+                      stroke="#1e293b"
+                      strokeWidth="0.4"
+                      opacity={hoveredDistrict === district.name ? 1 : 0.85}
+                      onMouseEnter={() => setHoveredDistrict(district.name)}
+                      onMouseLeave={() => setHoveredDistrict(null)}
+                      className="cursor-pointer transition-all hover:opacity-100 hover:stroke-2"
+                    />
+                    {(hoveredDistrict === district.name || district.population > 100000) && (
+                      <>
+                        <text
+                          x={district.x}
+                          y={district.y - Math.sqrt(district.population / 2500) - 2.5}
+                          textAnchor="middle"
+                          className="text-xs font-bold pointer-events-none"
+                          fill="#0f172a"
+                          fontSize="3.5"
+                        >
+                          {district.name}
+                        </text>
+                        <text
+                          x={district.x}
+                          y={district.y + Math.sqrt(district.population / 2500) + 4}
+                          textAnchor="middle"
+                          className="text-xs pointer-events-none"
+                          fill="#1e40af"
+                          fontSize="3"
+                        >
+                          {district.population.toLocaleString('sv-SE')}
+                        </text>
+                      </>
+                    )}
+                  </g>
+                ))}
+              </svg>
+              <div className="absolute top-2 right-2 md:top-4 md:right-4 bg-white p-3 md:p-4 rounded-lg shadow-lg text-xs md:text-sm">
+                <p className="font-semibold text-gray-700 mb-2">11 stadsdelsområden</p>
+                <p className="text-gray-600 mb-1">🔵 Cirkelstorlek = invånarantal</p>
+                <p className="text-gray-500 text-xs">Hovra för detaljer</p>
+              </div>
+              
+              <div className="absolute bottom-2 left-2 md:bottom-4 md:left-4 bg-white p-2 md:p-3 rounded-lg shadow-md text-xs">
+                <p className="font-semibold text-gray-700 mb-1">Störst folkökning 2024:</p>
+                <p className="text-blue-600">Järva: +2 561 personer</p>
+                <p className="text-blue-600">Hägersten-Älvsjö: +1 694</p>
+              </div>
+            </div>
+          )}
+
+          {view === 'bar' && (
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart 
+                data={districts.sort((a, b) => b.population - a.population)}
+                margin={{ top: 20, right: 30, left: 20, bottom: 100 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis 
+                  dataKey="name" 
+                  angle={-45} 
+                  textAnchor="end" 
+                  height={120}
+                  interval={0}
+                  style={{ fontSize: '11px' }}
+                />
+                <YAxis 
+                  label={{ value: 'Invånare', angle: -90, position: 'insideLeft' }}
+                />
+                <Tooltip 
+                  formatter={(value) => value.toLocaleString('sv-SE') + ' invånare'}
+                  labelStyle={{ color: '#333' }}
+                />
+                <Legend />
+                <Bar 
+                  dataKey="population" 
+                  name="Invånarantal"
+                  fill="#3B82F6"
+                  radius={[8, 8, 0, 0]}
+                >
+                  {districts.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.color} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          )}
+
+          {view === 'pie' && (
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie
+                  data={districts}
+                  dataKey="population"
+                  nameKey="name"
+                  cx="50%"
+                  cy="50%"
+                  outerRadius={window.innerWidth < 768 ? 120 : 160}
+                  label={({ name, percent }) => 
+                    `${name.split('-')[0]} ${(percent * 100).toFixed(1)}%`
+                  }
+                  labelLine={true}
+                  style={{ fontSize: window.innerWidth < 768 ? '10px' : '12px' }}
+                >
+                  {districts.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.color} />
+                  ))}
+                </Pie>
+                <Tooltip 
+                  formatter={(value) => value.toLocaleString('sv-SE') + ' invånare'}
+                />
+              </PieChart>
+            </ResponsiveContainer>
+          )}
+        </div>
+
+        <div className="mt-6 p-4 bg-blue-50 rounded-lg">
+          <h3 className="font-semibold text-gray-800 mb-2 text-sm md:text-base">Fakta om Stockholms befolkning:</h3>
+          <ul className="text-xs md:text-sm text-gray-700 space-y-1">
+            <li>• <cite>Stockholm växte med 6 631 invånare under 2024, en ökning på 0,7%</cite></li>
+            <li>• <cite>8 av 11 stadsdelsområden ökade i befolkning</cite></li>
+            <li>• <cite>Norra innerstaden är störst med 155 286 invånare</cite></li>
+            <li>• <cite>Skärholmen är minst med 38 112 invånare</cite></li>
+            <li>• <cite>Stockholm väntas passera en miljon invånare under 2025</cite></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default StockholmPopulationMap;
