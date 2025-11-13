@@ -1,0 +1,1409 @@
+
+<!-- Copyright © Aelia Consulting AB 2025. All rights reserved.
+     Unauthorized copying or redistribution is prohibited. -->
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Stockholm Interaktiv Karta</title>
+  
+  <!-- Leaflet -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js">
+    
+
+  </script>
+  
+  <!-- Leaflet.Draw -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css"/>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
+  
+  <!-- Leaflet.awesome-markers -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/Leaflet.awesome-markers/2.0.2/leaflet.awesome-markers.css"/>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Leaflet.awesome-markers/2.0.2/leaflet.awesome-markers.min.js"></script>
+  
+  <!-- html2canvas för kartexport -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  
+  <!-- Proj4js för koordinattransformering -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/proj4js/2.9.0/proj4.js"></script>
+  
+  <!-- Font Awesome -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"/>
+  
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif; }
+    
+    #map { 
+      width: 100vw; 
+      height: 100vh; 
+    }
+    
+    /* Ikonväljare */
+    .icon-panel {
+      position: absolute;
+      top: 10px;
+      left: 60px;
+      background: white;
+      padding: 15px;
+      border-radius: 8px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+      z-index: 1000;
+      max-width: 260px;
+    }
+    
+    .icon-panel h4 {
+      margin: 0 0 10px 0;
+      font-size: 14px;
+      font-weight: 600;
+      color: #333;
+    }
+    
+    .icon-grid {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 6px;
+    }
+    
+    .icon-btn {
+      width: 40px;
+      height: 40px;
+      border: 2px solid #ddd;
+      border-radius: 8px;
+      background: white;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s ease;
+      font-size: 18px;
+    }
+    
+    .icon-btn:hover {
+      transform: scale(1.1);
+      border-color: #666;
+    }
+    
+    .icon-btn.selected {
+      border-color: #2A9D8F;
+      border-width: 3px;
+      box-shadow: 0 0 10px rgba(42,157,143,0.5);
+    }
+    
+    /* Exportknapp */
+    .export-btn {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      z-index: 1000;
+      padding: 12px 20px;
+      background: #2A9D8F;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 14px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+      transition: background 0.2s;
+    }
+    
+    .export-btn:hover {
+      background: #238276;
+    }
+    
+    /* Knappgrupp */
+    .button-group {
+      position: absolute;
+      bottom: 60px;
+      right: 10px;
+      z-index: 1000;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    
+    .button-group button {
+      padding: 10px 15px;
+      background: #2A9D8F;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 13px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+      transition: background 0.2s;
+      white-space: nowrap;
+    }
+    
+    .button-group button:hover {
+      background: #238276;
+    }
+    
+    /* Verksamhetstyper panel */
+    .service-panel {
+      position: absolute;
+      bottom: 180px;
+      right: 10px;
+      background: white;
+      padding: 15px;
+      border-radius: 8px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+      z-index: 1001;
+      width: 320px;
+      max-height: 450px;
+      overflow-y: auto;
+      display: none;
+    }
+    
+    .service-panel h4 {
+      margin: 0 0 10px 0;
+      font-size: 14px;
+      font-weight: 600;
+    }
+    
+    .service-panel label {
+      display: block;
+      padding: 5px 0;
+      cursor: pointer;
+      font-size: 13px;
+    }
+    
+    .service-panel input[type="checkbox"] {
+      margin-right: 8px;
+    }
+    
+    /* Modal */
+    .modal-backdrop {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.5);
+      z-index: 1999;
+    }
+    
+    .modal {
+      display: none;
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: white;
+      padding: 25px;
+      border-radius: 12px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+      z-index: 2000;
+      min-width: 350px;
+      max-width: 500px;
+    }
+    
+    .modal h3 {
+      margin: 0 0 20px 0;
+      font-size: 18px;
+      color: #333;
+    }
+    
+    .modal label {
+      display: block;
+      margin-bottom: 15px;
+    }
+    
+    .modal label strong {
+      display: block;
+      margin-bottom: 5px;
+      font-size: 13px;
+      color: #555;
+    }
+    
+    .modal input,
+    .modal textarea {
+      width: 100%;
+      padding: 10px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      font-size: 14px;
+      font-family: inherit;
+    }
+    
+    .modal textarea {
+      min-height: 80px;
+      resize: vertical;
+    }
+    
+    .modal-buttons {
+      margin-top: 20px;
+      display: flex;
+      gap: 10px;
+    }
+    
+    .modal button {
+      flex: 1;
+      padding: 10px 20px;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 14px;
+      transition: all 0.2s;
+    }
+    
+    .btn-save {
+      background: #2A9D8F;
+      color: white;
+    }
+    
+    .btn-save:hover {
+      background: #238276;
+    }
+    
+    .btn-cancel {
+      background: #e0e0e0;
+      color: #333;
+    }
+    
+    .btn-cancel:hover {
+      background: #d0d0d0;
+    }
+    
+    /* Exportpanel */
+    .export-panel {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      background: white;
+      padding: 15px;
+      border-radius: 8px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+      z-index: 1000;
+      min-width: 200px;
+    }
+    
+    .export-panel h4 {
+      margin: 0 0 10px 0;
+      font-size: 14px;
+      font-weight: 600;
+      color: #333;
+    }
+    
+    .export-option {
+      margin: 8px 0;
+    }
+    
+    .export-option button {
+      width: 100%;
+      padding: 8px 12px;
+      background: #f5f5f5;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 13px;
+      text-align: left;
+      transition: all 0.2s;
+    }
+    
+    .export-option button:hover {
+      background: #e8e8e8;
+      border-color: #999;
+    }
+    
+    .export-option button i {
+      margin-right: 8px;
+      width: 16px;
+    }
+    
+    /* Skala och norr-pil */
+    .leaflet-control-scale {
+      font-size: 11px;
+      background: white;
+      padding: 2px 5px;
+    }
+    
+    .north-arrow {
+      position: absolute;
+      bottom: 30px;
+      right: 10px;
+      background: white;
+      padding: 10px;
+      border-radius: 50%;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+      z-index: 1000;
+      width: 50px;
+      height: 50px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 24px;
+      font-weight: bold;
+      color: #c0392b;
+    }
+  
+    .sdn-label {
+      font-weight: bold;
+      color: #000;
+      text-shadow: 0 0 3px #fff;
+    }
+
+  
+    #service-details-panel {
+      position: absolute;
+      top: 70px;
+      right: 10px;
+      width: 340px;
+      max-height: 70vh;
+      background: #ffffff;
+      border-radius: 10px;
+      box-shadow: 0 2px 12px rgba(0, 0, 0, 0.25);
+      z-index: 1500;
+      display: none;
+      overflow: hidden;
+      font-size: 13px;
+    }
+
+    #service-details-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 12px;
+      background: #2A9D8F;
+      color: #fff;
+      font-weight: 600;
+    }
+
+    #service-details-header button {
+      background: transparent;
+      border: none;
+      color: #fff;
+      font-size: 20px;
+      cursor: pointer;
+    }
+
+    #service-details-content {
+      padding: 10px 12px;
+      overflow-y: auto;
+      max-height: calc(70vh - 40px);
+    }
+
+    #service-details-content h4 {
+      margin: 10px 0 4px;
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    #service-details-content p {
+      margin: 0 0 6px;
+      line-height: 1.3;
+    }
+
+    #service-details-content ul {
+      margin: 4px 0 8px 18px;
+      padding: 0;
+    }
+
+    #service-details-content li {
+      margin-bottom: 4px;
+    }
+
+  </style>
+  <style>
+  /* Ta bort svart fokusrektangel runt polygoner vid klick */
+  path.leaflet-interactive:focus {
+    outline: none !important;
+  }
+</style>
+
+</head>
+<body>
+  <div id="map"></div>
+  
+  <div id="service-details-panel">
+    <div id="service-details-header">
+      <span id="service-details-title">Detaljer</span>
+      <button id="service-details-close" title="Stäng">&times;</button>
+    </div>
+    <div id="service-details-content">
+      <p>Välj en plats och klicka på "Mer info" i popup-rutan.</p>
+    </div>
+  </div>
+
+  
+  <!-- Ikonväljare -->
+  <div class="icon-panel">
+    <h4>Välj markörikon:</h4>
+    <div class="icon-grid" id="icon-grid"></div>
+  </div>
+  
+  <!-- Exportpanel för kartbilder -->
+  <div class="export-panel">
+    <h4>📸 Exportera kartbild</h4>
+    <div class="export-option">
+      <button onclick="exportMapImage('screen')">
+        <i class="fas fa-desktop"></i>Skärm (72 DPI)
+      </button>
+    </div>
+    <div class="export-option">
+      <button onclick="exportMapImage('print')">
+        <i class="fas fa-print"></i>Tryck (150 DPI)
+      </button>
+    </div>
+    <div class="export-option">
+      <button onclick="exportMapImage('high')">
+        <i class="fas fa-image"></i>Högupplöst (300 DPI)
+      </button>
+    </div>
+    <hr style="margin: 10px 0; border: none; border-top: 1px solid #ddd;">
+    <button onclick="exportGeoJSON()" style="width: 100%; padding: 10px; background: #2A9D8F; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600;">
+      💾 Exportera GeoJSON
+    </button>
+  </div>
+  
+  <!-- Knappgrupp nere till höger -->
+  <div class="button-group">
+    <button type="button" onclick="toggleServicePanel()" autofocus>📍 Välj verksamheter</button>
+  </div>
+  
+  <!-- Panel för att välja verksamhetstyper -->
+  <div class="service-panel" id="service-panel">
+    <h4>Välj verksamhetstyper:</h4>
+    <div id="service-list" style="max-height: 300px; overflow-y: auto;">Laddar...</div>
+    <button onclick="loadSelectedServices()" style="margin-top: 10px; width: 100%; padding: 10px; background: #2A9D8F; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600;">
+      Ladda valda
+    </button>
+  </div>
+  
+  <!-- Norr-pil -->
+  <div class="north-arrow" title="Norr">N</div>
+  
+  <!-- Modal för attribut -->
+  <div class="modal-backdrop" id="backdrop" onclick="closeModal()"></div>
+  <div class="modal" id="modal">
+    <h3>Lägg till information</h3>
+    <label>
+      <strong>Namn</strong>
+      <input type="text" id="attr-name" placeholder="T.ex. Systembolaget Söder">
+    </label>
+    <label>
+      <strong>Beskrivning</strong>
+      <textarea id="attr-desc" placeholder="T.ex. Öppet mån-fre 10-19"></textarea>
+    </label>
+    <label>
+      <strong>Kategori</strong>
+      <input type="text" id="attr-cat" placeholder="T.ex. Butik, Service">
+    </label>
+    <div class="modal-buttons">
+      <button class="btn-save" onclick="saveAttributes()">Spara</button>
+      <button class="btn-cancel" onclick="closeModal()">Avbryt</button>
+    </div>
+  </div>
+
+  <script>
+    // Initiera karta
+    
+const params = new URLSearchParams(window.location.search);
+const lat = parseFloat(params.get('lat'));
+const lng = parseFloat(params.get('lng'));
+const zoom = parseInt(params.get('zoom'));
+
+const defaultCenter = [59.33, 18.05];
+const defaultZoom = 12;
+
+const map = L.map('map').setView(
+  (!isNaN(lat) && !isNaN(lng)) ? [lat, lng] : defaultCenter,
+  !isNaN(zoom) ? zoom : defaultZoom
+);
+
+map.on('moveend', function() {
+  const c = map.getCenter();
+  const z = map.getZoom();
+  const u = new URL(window.location);
+  u.searchParams.set('lat', c.lat.toFixed(5));
+  u.searchParams.set('lng', c.lng.toFixed(5));
+  u.searchParams.set('zoom', z);
+  window.history.replaceState({}, '', u);
+});
+
+    
+    // Lägg till OpenStreetMap som bas (fungerar med CORS)
+    const osmLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© OpenStreetMap contributors',
+      maxZoom: 19
+    });
+    
+    // Lägg till WMS-bakgrund från Stockholms stad
+    const wmsLayer = L.tileLayer.wms('https://kartor.stockholm.se/bios/wms/app/baggis/web/WMS_STHLM_STADENS_MANER', {
+      layers: 'p_1005020',
+      format: 'image/png',
+      transparent: true,
+      attribution: '© Stockholms stad'
+    });
+    
+    // Visa WMS som standard
+    wmsLayer.addTo(map);
+    
+    // Lägg till lagerkontroll
+    const baseLayers = {
+      'Stockholm stad': wmsLayer,
+      'OpenStreetMap': osmLayer
+    };
+    const overlayLayers = {};
+    const layersControl = L.control.layers(baseLayers, overlayLayers, { position: 'topright' }).addTo(map);
+
+    // Stadsdelsnämnder från GitHub (GeoJSON)
+    const sdnUrl = 'https://raw.githubusercontent.com/soleildeminuit/AI-Samhallsplanering-Course/main/data/raw/stadsdelsn%C3%A4mnder_stockholm_epsg_4326.geojson';
+
+    const stadsdelsLayer = L.geoJSON(null, {
+      style: function (feature) {
+        return {
+          color: '#000000',
+          weight: 2,
+          fillOpacity: 0,
+          dashArray: '6,4'
+        };
+      },
+      onEachFeature: function (feature, layer) {
+        const props = feature.properties || {};
+        const namn = props.Namn_grundform || props.Namn || '';
+        if (namn) {
+          layer.bindTooltip(namn, {
+            permanent: false,
+            direction: 'center',
+            className: 'sdn-label'
+          });
+        }
+      }
+    });
+
+    fetch(sdnUrl)
+      .then(response => response.json())
+      .then(data => {
+        stadsdelsLayer.addData(data);
+        stadsdelsLayer.addTo(map);
+        layersControl.addOverlay(stadsdelsLayer, 'Stadsdelsnämnder');
+        console.log('✅ Stadsdelsnämndernas gränser inlästa från GitHub');
+      })
+      .catch(error => {
+        console.error('Fel vid inläsning av stadsdelsnämndernas GeoJSON:', error);
+      });
+    
+    // Ikonbibliotek
+    const iconLibrary = {
+      flag: { icon: 'flag', color: 'red', label: '🚩 Flagga' },
+      hospital: { icon: 'hospital', color: 'red', label: '🏥 Sjukhus' },
+      school: { icon: 'graduation-cap', color: 'blue', label: '🎓 Skola' },
+      tree: { icon: 'tree', color: 'green', label: '🌳 Park' },
+      train: { icon: 'train', color: 'darkblue', label: '🚇 Tåg' },
+      shopping: { icon: 'shopping-cart', color: 'orange', label: '🛒 Affär' },
+      restaurant: { icon: 'utensils', color: 'red', label: '🍴 Restaurang' },
+      coffee: { icon: 'mug-hot', color: 'cadetblue', label: '☕ Café' },
+      home: { icon: 'home', color: 'lightgreen', label: '🏠 Hem' },
+      building: { icon: 'building', color: 'gray', label: '🏢 Kontor' },
+      landmark: { icon: 'landmark', color: 'purple', label: '🏛️ Landmärke' },
+      fire: { icon: 'fire-extinguisher', color: 'red', label: '🚒 Brand' },
+      police: { icon: 'shield-halved', color: 'darkblue', label: '👮 Polis' },
+      bus: { icon: 'bus', color: 'orange', label: '🚌 Buss' },
+      parking: { icon: 'square-parking', color: 'blue', label: '🅿️ Parkering' },
+      star: { icon: 'star', color: 'orange', label: '⭐ Favorit' },
+      heart: { icon: 'heart', color: 'pink', label: '❤️ Hjärta' },
+      camera: { icon: 'camera', color: 'purple', label: '📷 Foto' },
+      info: { icon: 'circle-info', color: 'lightblue', label: 'ℹ️ Info' },
+      warning: { icon: 'triangle-exclamation', color: 'orange', label: '⚠️ Varning' }
+    };
+    
+    let selectedIconType = 'flag';
+    let currentLayer = null;
+    const drawnItems = new L.FeatureGroup();
+    map.addLayer(drawnItems);
+    
+    // Lager för äldreboenden
+    const aldreboendenLayer = new L.FeatureGroup();
+    map.addLayer(aldreboendenLayer);
+    
+    // Lagra verksamhetstyper
+    let serviceTypes = [];
+    
+    // Ikon-mappning för olika verksamhetstyper
+    const serviceIconMap = {
+      // Äldreomsorg
+      '11': { icon: 'hospital', color: 'red' },        // Vård- och omsorgsboende
+      '8': { icon: 'hospital', color: 'orange' },      // Servicehus
+      '9': { icon: 'hospital', color: 'pink' },        // Korttidsvård
+      '7': { icon: 'hospital', color: 'cadetblue' },   // Profilboende
+      '12': { icon: 'hospital', color: 'lightgreen' }, // Dagverksamhet
+      
+      // Skola & utbildning
+      '2': { icon: 'child', color: 'blue' },           // Förskola
+      '1': { icon: 'child', color: 'lightblue' },      // Pedagogisk omsorg
+      '13': { icon: 'graduation-cap', color: 'darkblue' }, // Grundskola
+      '14': { icon: 'graduation-cap', color: 'blue' },     // Anpassad grundskola
+      '118': { icon: 'university', color: 'purple' },      // Gymnasieskola
+      '119': { icon: 'university', color: 'darkpurple' },  // Anpassad gymnasieskola
+      '113': { icon: 'book', color: 'orange' },        // Komvux
+      '112': { icon: 'language', color: 'green' },     // Sfi
+      '10': { icon: 'baby-carriage', color: 'pink' },  // Öppen förskola
+      
+      // Fritid & rekreation
+      '102': { icon: 'child', color: 'green' },        // Lekplats
+      '103': { icon: 'tree', color: 'green' },         // Parklek
+      '149': { icon: 'users', color: 'purple' },       // Fritidsgård
+      '104': { icon: 'swimmer', color: 'blue' },       // Badplats
+      '128': { icon: 'swimming-pool', color: 'lightblue' }, // Utomhusbassäng
+      '121': { icon: 'running', color: 'green' },      // Motionsspår
+      '122': { icon: 'dumbbell', color: 'red' },       // Utegym
+      '123': { icon: 'futbol', color: 'orange' },      // Idrottsanläggning
+      '129': { icon: 'futbol', color: 'green' },       // Öppen bollplan
+      '126': { icon: 'skating', color: 'purple' },     // Skatepark
+      '131': { icon: 'running', color: 'darkblue' },   // Parkourpark
+      '33006': { icon: 'compact-disc', color: 'orange' }, // Discgolfbana
+      '127': { icon: 'skiing', color: 'blue' },        // Skidspår
+      '125': { icon: 'skating', color: 'lightblue' }, // Sjöisbana
+      '130': { icon: 'skating', color: 'cadetblue' }, // Skridskois
+      '109': { icon: 'anchor', color: 'blue' },        // Båtplats
+      
+      // Kultur & möten
+      '100': { icon: 'calendar', color: 'red' },       // Evenemangsplats
+      '101': { icon: 'landmark', color: 'purple' },    // Evenemangsanläggning
+      '108': { icon: 'users', color: 'orange' },       // Samlingslokal
+      '124': { icon: 'coffee', color: 'cadetblue' },   // Träffpunkt seniorer
+      '136': { icon: 'home', color: 'green' },         // Träfflokal
+      '150': { icon: 'building', color: 'darkblue' }, // Medborgarkontor
+      
+      // Övrigt
+      '105': { icon: 'seedling', color: 'green' },     // Koloniträdgård
+      '106': { icon: 'seedling', color: 'lightgreen' }, // Odlingslott
+      '107': { icon: 'tint', color: 'lightblue' },     // Plaskdamm
+      '110': { icon: 'cross', color: 'gray' },         // Begravningsplats
+      '111': { icon: 'church', color: 'darkred' },     // Kapell
+      
+      // Funktionsnedsättning & stöd
+      '15': { icon: 'hands-helping', color: 'purple' }, // Daglig verksamhet
+      '16': { icon: 'briefcase', color: 'orange' },     // Sysselsättning
+      '146': { icon: 'home', color: 'blue' },          // Gruppbostad LSS
+      '147': { icon: 'home', color: 'cadetblue' },     // Gruppbostad SoL
+      '145': { icon: 'home', color: 'lightblue' },     // Servicebostad LSS
+      '144': { icon: 'child', color: 'purple' },       // Gruppbostad barn/unga
+      '148': { icon: 'home', color: 'pink' },          // Korttidshem barn/unga
+      '134': { icon: 'home', color: 'orange' },        // Korttidshem vuxna
+      '133': { icon: 'user-friends', color: 'green' }, // Ledsagarservice LSS
+      '137': { icon: 'walking', color: 'lightgreen' }, // Ledsagning SoL
+      '138': { icon: 'hand-holding-heart', color: 'pink' }, // Avlösarservice LSS
+      '142': { icon: 'heart', color: 'red' },          // Avlösning SoL
+      '143': { icon: 'home', color: 'cadetblue' },     // Boendestöd
+      '135': { icon: 'home', color: 'purple' },        // Stödboende
+      '140': { icon: 'users', color: 'blue' },         // Familjerådgivning
+      '151': { icon: 'briefcase', color: 'darkblue' }, // Arbetsmarknadsinsats
+      '132': { icon: 'campground', color: 'green' },   // Kollo
+      
+      // Hemtjänst
+      '6': { icon: 'hands-helping', color: 'orange' }  // Hemtjänst
+    };
+    
+    // Definiera EPSG:3011 (SWEREF99 TM / SWEREF99 1800)
+    proj4.defs("EPSG:3011", "+proj=tmerc +lat_0=0 +lon_0=18 +k=1 +x_0=150000 +y_0=0 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs +type=crs");
+    
+    // Ladda verksamhetstyper när sidan laddas
+    loadServiceTypes();
+    
+    // Skapa ikonväljare
+    const iconGrid = document.getElementById('icon-grid');
+    Object.keys(iconLibrary).forEach(key => {
+      const btn = document.createElement('button');
+      btn.className = 'icon-btn' + (key === 'flag' ? ' selected' : '');
+      btn.innerHTML = `<i class="fas fa-${iconLibrary[key].icon}"></i>`;
+      btn.title = iconLibrary[key].label;
+      btn.onclick = () => {
+        selectedIconType = key;
+        document.querySelectorAll('.icon-btn').forEach(b => b.classList.remove('selected'));
+        btn.classList.add('selected');
+      };
+      iconGrid.appendChild(btn);
+    });
+    
+    // Lägg till ritverktyg
+    const drawControl = new L.Control.Draw({
+      edit: {
+        featureGroup: drawnItems,
+        remove: true
+      },
+      draw: {
+        polygon: true,
+        polyline: true,
+        rectangle: true,
+        circle: true,
+        marker: true,
+        circlemarker: false
+      }
+    });
+    map.addControl(drawControl);
+    
+    // Lägg till skala
+    L.control.scale({
+      metric: true,
+      imperial: false,
+      position: 'bottomleft'
+    }).addTo(map);
+    
+    // Uppdatera markörikon innan ritning
+    map.on('draw:drawstart', (e) => {
+      if (e.layerType === 'marker') {
+        const iconData = iconLibrary[selectedIconType];
+        L.Draw.Marker.prototype.options.icon = L.AwesomeMarkers.icon({
+          icon: iconData.icon,
+          markerColor: iconData.color,
+          prefix: 'fa'
+        });
+      }
+    });
+    
+    // När objekt skapas
+    map.on(L.Draw.Event.CREATED, (e) => {
+      const layer = e.layer;
+      
+      // Spara ikon-metadata för markörer
+      if (e.layerType === 'marker') {
+        layer.iconType = selectedIconType;
+        layer.iconData = iconLibrary[selectedIconType];
+      }
+      
+      // Lägg till click-händelse
+      layer.on('click', () => {
+        currentLayer = layer;
+        showModal();
+      });
+      
+      drawnItems.addLayer(layer);
+      
+      // Visa attribut-formulär
+      currentLayer = layer;
+      setTimeout(() => showModal(), 100);
+    });
+    
+    // Modal-funktioner
+    function showModal() {
+      const props = currentLayer.feature?.properties || {};
+      document.getElementById('attr-name').value = props.name || '';
+      document.getElementById('attr-desc').value = props.description || '';
+      document.getElementById('attr-cat').value = props.category || '';
+      document.getElementById('modal').style.display = 'block';
+      document.getElementById('backdrop').style.display = 'block';
+    }
+    
+    function closeModal() {
+      document.getElementById('modal').style.display = 'none';
+      document.getElementById('backdrop').style.display = 'none';
+      currentLayer = null;
+    }
+    
+    function saveAttributes() {
+      if (!currentLayer) return;
+      
+      // Skapa feature om den inte finns
+      if (!currentLayer.feature) {
+        currentLayer.feature = {
+          type: 'Feature',
+          properties: {}
+        };
+      }
+      
+      // Spara attribut
+      currentLayer.feature.properties.name = document.getElementById('attr-name').value;
+      currentLayer.feature.properties.description = document.getElementById('attr-desc').value;
+      currentLayer.feature.properties.category = document.getElementById('attr-cat').value;
+      
+      // Lägg till ikon-metadata om det är en markör
+      if (currentLayer.iconType) {
+        currentLayer.feature.properties.icon_type = currentLayer.iconType;
+        currentLayer.feature.properties.icon_label = currentLayer.iconData.label;
+      }
+      
+      // Uppdatera popup
+      const name = currentLayer.feature.properties.name || 'Namnlös';
+      const desc = currentLayer.feature.properties.description;
+      const cat = currentLayer.feature.properties.category;
+      
+      let popupContent = `<strong>${name}</strong>`;
+      if (desc) popupContent += `<br>${desc}`;
+      if (cat) popupContent += `<br><em>${cat}</em>`;
+      
+      currentLayer.bindPopup(popupContent);
+      
+      closeModal();
+    }
+    
+    // Export till GeoJSON
+    function exportGeoJSON() {
+      const geojson = drawnItems.toGeoJSON();
+      
+      if (geojson.features.length === 0) {
+        alert('⚠️ Inga objekt att exportera!\n\nRita något i kartan först.');
+        return;
+      }
+      
+      // Skapa blob och ladda ner
+      const blob = new Blob([JSON.stringify(geojson, null, 2)], {
+        type: 'application/geo+json'
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `stockholm_${new Date().toISOString().split('T')[0]}.geojson`;
+      a.click();
+      URL.revokeObjectURL(url);
+      
+      alert(`✅ Exporterade ${geojson.features.length} objekt!`);
+    }
+    
+    // Export kartbild med olika upplösningar
+    function exportMapImage(quality) {
+      const sizes = {
+        screen: { scale: 1, dpi: 72, label: 'skärm' },
+        print: { scale: 2, dpi: 150, label: 'tryck' },
+        high: { scale: 3, dpi: 300, label: 'högupplöst' }
+      };
+      
+      const config = sizes[quality];
+      const mapElement = document.getElementById('map');
+      
+      // Kolla om WMS-lagret är aktivt
+      const isWMS = map.hasLayer(wmsLayer);
+      
+      // Visa laddningsmeddelande
+      const loadingMsg = document.createElement('div');
+      loadingMsg.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:white;padding:20px;border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,0.3);z-index:3000;font-size:16px;text-align:center;';
+      
+      if (isWMS) {
+        loadingMsg.innerHTML = `⚠️ WMS-lager kan inte exporteras<br><br>Byter tillfälligt till OpenStreetMap...<br><small>Du kan byta tillbaka efteråt</small>`;
+        document.body.appendChild(loadingMsg);
+        
+        // Byt till OSM temporärt
+        map.removeLayer(wmsLayer);
+        map.addLayer(osmLayer);
+        
+        setTimeout(() => createImage(), 1500);
+      } else {
+        loadingMsg.innerHTML = `⏳ Skapar ${config.label}-bild (${config.dpi} DPI)...<br><small>Detta kan ta några sekunder</small>`;
+        document.body.appendChild(loadingMsg);
+        setTimeout(() => createImage(), 500);
+      }
+      
+      function createImage() {
+        html2canvas(mapElement, {
+          useCORS: true,
+          allowTaint: false,
+          backgroundColor: '#ffffff',
+          scale: config.scale,
+          logging: false,
+          width: mapElement.offsetWidth,
+          height: mapElement.offsetHeight
+        }).then(canvas => {
+          // Konvertera canvas till blob och ladda ner
+          canvas.toBlob(blob => {
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `stockholm_karta_${quality}_${config.dpi}dpi_${new Date().toISOString().split('T')[0]}.png`;
+            a.click();
+            URL.revokeObjectURL(url);
+            
+            // Ta bort laddningsmeddelande
+            document.body.removeChild(loadingMsg);
+            
+            // Byt tillbaka till WMS om det var aktivt
+            if (isWMS) {
+              map.removeLayer(osmLayer);
+              map.addLayer(wmsLayer);
+            }
+            
+            alert(`✅ Kartbild sparad!\n\nFilnamn: ${a.download}\nUpplösning: ${config.dpi} DPI\nSkala: ${config.scale}x\n\nKolla i din nedladdningsmapp!`);
+          }, 'image/png', 1.0);
+        }).catch(error => {
+          document.body.removeChild(loadingMsg);
+          
+          // Byt tillbaka till WMS vid fel
+          if (isWMS) {
+            map.removeLayer(osmLayer);
+            map.addLayer(wmsLayer);
+          }
+          
+          console.error('Export misslyckades:', error);
+          alert('❌ Kunde inte exportera bilden.\n\nFörsök igen eller välj en lägre upplösning.');
+        });
+      }
+    }
+    
+    // Ladda alla verksamhetstyper från API
+    async function loadServiceTypes() {
+      try {
+        const response = await fetch('https://apigw.stockholm.se/api2/PublicHittaCMS/api/servicetypes');
+        const data = await response.json();
+        serviceTypes = data.data;
+        
+        // Bygg checkboxlista
+        const list = document.getElementById('service-list');
+        list.innerHTML = '';
+        
+        // Förvald: Äldreboenden
+        // const preselected = ['11', '8', '9']; // Vård- och omsorgsboende, Servicehus, Korttidsvård
+        const preselected = []; // Vård- och omsorgsboende, Servicehus, Korttidsvård
+		
+        serviceTypes.forEach(service => {
+          const label = document.createElement('label');
+          const checkbox = document.createElement('input');
+          checkbox.type = 'checkbox';
+          checkbox.value = service.id;
+          checkbox.id = 'service-' + service.id;
+          if (preselected.includes(service.id)) {
+            checkbox.checked = true;
+          }
+          
+          label.appendChild(checkbox);
+          label.appendChild(document.createTextNode(' ' + service.attributes.name));
+          list.appendChild(label);
+        });
+        
+        console.log('✅ Laddade', serviceTypes.length, 'verksamhetstyper');
+      } catch (error) {
+        console.error('Kunde inte ladda verksamhetstyper:', error);
+        document.getElementById('service-list').innerHTML = '<p style="color: red;">Kunde inte ladda verksamhetstyper</p>';
+      }
+    }
+    
+    // Visa/dölj verksamhetspanel
+    function toggleServicePanel() {
+      const panel = document.getElementById('service-panel');
+      panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+    }
+    
+    // Ladda valda verksamheter
+    
+// --- Hantering av URL-parametrar för förvalda verksamheter ---
+
+// Funktion för att hämta queryparametrar
+// --- Hantering av URL-parametrar för förvalda verksamheter ---
+function getQueryParams() {
+  const params = {};
+  window.location.search
+    .substring(1)
+    .split('&')
+    .forEach(pair => {
+      const [key, value] = pair.split('=');
+      if (key) params[decodeURIComponent(key)] = decodeURIComponent(value || '');
+    });
+  return params;
+}
+
+function updateURLParams(selectedIds) {
+  const newUrl = `${window.location.pathname}?services=${selectedIds.join(',')}`;
+  window.history.replaceState({}, '', newUrl);
+}
+
+window.addEventListener('load', () => {
+  const params = getQueryParams();
+  const ids = params.services ? params.services.split(',').map(x => x.trim()).filter(Boolean) : [];
+
+  // Starta tomt om inga parametrar finns
+  if (ids.length === 0) {
+    console.log("Ingen URL-parameter – kartan startar tom.");
+    document.querySelectorAll('.service-checkbox').forEach(cb => (cb.checked = false));
+    return;
+  }
+
+  console.log("URL-parametrar hittades:", ids);
+
+  // Vänta tills alla checkboxar (service-väljaren) verkligen har skapats
+  const observer = new MutationObserver(() => {
+    let allFound = ids.every(id => document.getElementById('service-' + id));
+    if (allFound) {
+      observer.disconnect();
+
+      // Markera de som anges i URL:en
+      ids.forEach(id => {
+        const cb = document.getElementById('service-' + id);
+        if (cb) cb.checked = true;
+      });
+
+      console.log("Förvalda tjänster markerade:", ids);
+
+      // Ladda verksamheter utan att skriva om URL:en igen
+      loadSelectedServices(true);
+    }
+  });
+
+  observer.observe(document.body, { childList: true, subtree: true });
+});
+
+
+async function loadSelectedServices(skipUrlUpdate = false) {
+      // Hämta valda verksamhetstyper
+      const selected = serviceTypes
+        .filter(s => document.getElementById('service-' + s.id)?.checked)
+        .map(s => s.id);
+      if (!skipUrlUpdate) updateURLParams(selected);
+      
+      if (selected.length === 0) {
+        alert('⚠️ Välj minst en verksamhetstyp!');
+        return;
+      }
+      
+      // Bygg URL
+      const url = `https://apigw.stockholm.se/api2/PublicHittaCMS/api/serviceunits?filter[servicetype.id]=${selected.join(',')}&page[limit]=5000&page[offset]=0&sort=name`;
+      
+      // Stäng panel
+      document.getElementById('service-panel').style.display = 'none';
+      
+      // Visa laddningsmeddelande
+      const loadingMsg = document.createElement('div');
+      loadingMsg.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:white;padding:20px;border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,0.3);z-index:3000;font-size:16px;text-align:center;';
+      loadingMsg.innerHTML = '⏳ Laddar verksamheter...<br><small>Hämtar data från Stockholms stads öppna dataportal</small>';
+      document.body.appendChild(loadingMsg);
+      
+      try {
+        const response = await fetch(url);
+        const data = await response.json();
+        
+        // Rensa befintliga enheter
+        aldreboendenLayer.clearLayers();
+        
+        let count = 0;
+        
+        // Loopa igenom alla enheter
+        data.data.forEach(unit => {
+  const attrs = unit.attributes || {};
+  const address = attrs.address || {};
+  
+  // Koordinater (som du redan gör)
+  if (attrs.location && attrs.location.east && attrs.location.north) {
+    const apiEast = attrs.location.east;
+    const apiNorth = attrs.location.north;
+
+    const [lng1, lat1] = proj4('EPSG:3011', 'EPSG:4326', [apiEast, apiNorth]);
+    const [lng2, lat2] = proj4('EPSG:3011', 'EPSG:4326', [apiNorth, apiEast]);
+
+    let lng, lat;
+    if (lat1 > 59 && lat1 < 60 && lng1 > 17 && lng1 < 19) {
+      lng = lng1;
+      lat = lat1;
+    } else if (lat2 > 59 && lat2 < 60 && lng2 > 17 && lng2 < 19) {
+      lng = lng2;
+      lat = lat2;
+    } else {
+      console.warn('⚠️ Ingen variant gav rätt koordinater:', attrs.name);
+      return;
+    }
+
+    // Plocka ut fält
+    const name = attrs.name || 'Namnlös enhet';
+    const street = address.street || '';
+    const city = address.city || '';
+    const postalCode = address.postalCode || '';
+
+    // Om telefon, e-post och url finns i JSON (hantera även objekt från api2):
+    const phone = attrs.phone || '';
+    const email = attrs.email || '';
+    let url = '';
+
+    if (typeof attrs.url === 'string') {
+      url = attrs.url;
+    } else if (attrs.url && typeof attrs.url === 'object') {
+      // Försök hitta en faktisk länk i objektet
+      if (attrs.url.href) {
+        url = attrs.url.href;
+      }
+    }
+    if (!url && unit.links && unit.links.self) {
+      url = unit.links.self;
+    }
+    if (!url && unit.urls && unit.urls.surl) {
+      url = unit.urls.surl;
+    }
+    if (!url && unit.urls && unit.urls.furl) {
+      url = unit.urls.furl;
+    }
+
+	// Korrigera gamla api-länkar -> api2
+	if (url && typeof url === 'string') {
+		url = url.replace('/api/PublicHittaCMS/', '/api2/PublicHittaCMS/');
+	}
+
+    let popupContent = `<strong>${name}</strong><br>`;
+    if (street) popupContent += `${street}<br>`;
+    if (postalCode || city) popupContent += `${postalCode} ${city}<br>`;
+    if (phone) popupContent += `📞 ${phone}<br>`;
+    if (email) popupContent += `✉️ ${email}<br>`;
+    if (url) {
+      popupContent += `<a href="${url}" class="more-info-link" data-service-id="${unit.id}">🔗 Mer info</a>`;
+    }
+
+    const serviceTypeId = attrs.serviceType?.data?.id || unit.relationships?.serviceType?.data?.id;
+    const iconConfig = serviceIconMap[serviceTypeId] || { icon: 'map-marker', color: 'blue' };
+
+    const marker = L.marker([lat, lng], {
+      icon: L.AwesomeMarkers.icon({
+        icon: iconConfig.icon,
+        markerColor: iconConfig.color,
+        prefix: 'fa'
+      })
+    });
+
+    marker.bindPopup(popupContent);
+    marker.bindTooltip(name, { direction: 'top' });
+
+    aldreboendenLayer.addLayer(marker);
+    count++;
+  }
+});
+
+        
+        // Ta bort laddningsmeddelande
+        document.body.removeChild(loadingMsg);
+        
+        // Visa resultat
+        alert(`✅ Laddade ${count} verksamheter!\n\nMarkörerna visas nu på kartan.\nKlicka på dem för mer information.`);
+        
+        // Zooma till äldreboenden
+        //if (count > 0) {
+        //  const bounds = aldreboendenLayer.getBounds();
+        //  map.fitBounds(bounds, { padding: [50, 50] });
+        //}
+        
+        // Forcera omritning av kartan
+        setTimeout(() => {
+          map.invalidateSize();
+          
+          // Se till att baslager är aktivt
+          if (!map.hasLayer(wmsLayer) && !map.hasLayer(osmLayer)) {
+            wmsLayer.addTo(map);
+          }
+        }, 100);
+        
+        console.log(`✅ Laddade ${count} verksamheter från Stockholms stad https://dataportalen.stockholm.se/`);
+        console.log('📍 Kontrollera att lng är ~18 och lat är ~59 ovan');
+        console.log('🗺️ Om punkterna är fel, berätta vilka koordinater du ser!');
+        
+      } catch (error) {
+        document.body.removeChild(loadingMsg);
+        console.error('Fel vid laddning av verksamheter:', error);
+        alert('❌ Kunde inte ladda verksamheter.\n\nKontrollera internetanslutningen och försök igen.');
+      }
+    }
+    
+    console.log('✅ Stockholm Interaktiv Karta laddad!');
+    console.log('📍 Rita objekt och klicka på dem för att lägga till attribut');
+    console.log('📸 Exportera kartbilder i olika upplösningar för rapporter');
+    console.log('🏢 Klicka "Välj verksamheter" för att ladda olika typer av verksamheter från Stockholm stad');
+  </script>
+
+  <script>
+    // ===== Detaljerad inforuta för "Mer info" =====
+    (function() {
+      const closeBtn = document.getElementById('service-details-close');
+      if (closeBtn) {
+        closeBtn.addEventListener('click', () => {
+          const panel = document.getElementById('service-details-panel');
+          if (panel) panel.style.display = 'none';
+        });
+      }
+
+      if (window.map) {
+        map.on('popupopen', function (e) {
+          const popupEl = e.popup.getElement();
+          if (!popupEl) return;
+
+          const link = popupEl.querySelector('.more-info-link');
+          if (!link) return;
+
+          link.addEventListener('click', function (evt) {
+            evt.preventDefault();
+            const serviceId = this.getAttribute('data-service-id');
+            if (serviceId) {
+              showServiceDetails(serviceId);
+            }
+          });
+        });
+      }
+
+      window.showServiceDetails = async function(serviceId) {
+        const panel = document.getElementById('service-details-panel');
+        const contentEl = document.getElementById('service-details-content');
+        const titleEl = document.getElementById('service-details-title');
+
+        if (!panel || !contentEl || !titleEl) return;
+
+        panel.style.display = 'block';
+        titleEl.textContent = 'Laddar...';
+        contentEl.innerHTML = '<p>⏳ Hämtar detaljerad information...</p>';
+
+        try {
+          const detailsUrl = `https://apigw.stockholm.se/api2/PublicHittaCMS/api/serviceunits/${serviceId}`;
+          const resp = await fetch(detailsUrl);
+          const json = await resp.json();
+
+          const html = buildServiceDetailsHtml(json);
+          const name = (json && json.data && json.data.attributes && json.data.attributes.name)
+            ? json.data.attributes.name
+            : 'Detaljer';
+
+          titleEl.textContent = name;
+          contentEl.innerHTML = html;
+        } catch (err) {
+          console.error('Fel vid hämtning av detaljinformation:', err);
+          titleEl.textContent = 'Fel';
+          contentEl.innerHTML = '<p>Det gick inte att hämta detaljinformation.</p>';
+        }
+      };
+
+      window.buildServiceDetailsHtml = function(json) {
+        const d = (json && json.data) || {};
+        const attrs = d.attributes || {};
+        const details = attrs.details || {};
+        const address = attrs.address || {};
+        const shortDesc = attrs.shortDescription || '';
+        const contentSections = attrs.contentSections || {};
+        const orgForm = (details.organizationalForm && details.organizationalForm.displayName) || '';
+        const specialComps = details.specialCompetences || [];
+        const numApts = details.numberOfApartments;
+        const rentMin = details.rentMin;
+        const rentMax = details.rentMax;
+        const documents = details.documents || [];
+        const included = json.included || [];
+
+        const contacts = included.filter(x => x.type === 'contacts');
+        const accessibility = included.filter(x => x.type === 'accessibilityfeatures');
+        const regions = included.filter(x => x.type === 'regions');
+        const serviceTypeIncl = included.find(x => x.type === 'servicetypes');
+
+        let html = '';
+
+        if (shortDesc) {
+          html += `<p>${shortDesc}</p>`;
+        }
+
+        if (attrs.website) {
+          html += `<p><a href="${attrs.website}" target="_blank">🌐 Webbplats</a></p>`;
+        }
+
+        if (address.street || address.postalCode || address.city) {
+          html += '<h4>Adress</h4>';
+          html += '<p>';
+          if (address.street) html += `${address.street}<br>`;
+          if (address.postalCode || address.city) {
+            html += `${address.postalCode || ''} ${address.city || ''}`.trim();
+          }
+          html += '</p>';
+        }
+
+        if (serviceTypeIncl || orgForm) {
+          html += '<h4>Typ av verksamhet</h4><p>';
+          if (serviceTypeIncl && serviceTypeIncl.attributes && serviceTypeIncl.attributes.name) {
+            html += serviceTypeIncl.attributes.name;
+          }
+          if (orgForm) {
+            html += (serviceTypeIncl && serviceTypeIncl.attributes && serviceTypeIncl.attributes.name ? ' · ' : '') + orgForm;
+          }
+          html += '</p>';
+        }
+
+        if (numApts || rentMin || rentMax) {
+          html += '<h4>Boende & hyra</h4><p>';
+          if (numApts) html += `Antal lägenheter: ${numApts}<br>`;
+          if (rentMin || rentMax) {
+            const minStr = rentMin ? rentMin.toLocaleString('sv-SE') : '';
+            const maxStr = rentMax ? rentMax.toLocaleString('sv-SE') : '';
+            html += `Hyra (ungefärlig): ${minStr}–${maxStr} kr/mån<br>`;
+          }
+          html += '</p>';
+        }
+
+        if (specialComps.length > 0) {
+          html += '<h4>Inriktning / särskilda kompetenser</h4><ul>';
+          specialComps.forEach(sc => {
+            if (sc.displayName) {
+              html += `<li>${sc.displayName}</li>`;
+            }
+          });
+          html += '</ul>';
+        }
+
+        if (documents.length > 0) {
+          html += '<h4>Dokument</h4><ul>';
+          documents.forEach(doc => {
+            if (doc.url) {
+              const title = doc.title || doc.url;
+              html += `<li><a href="${doc.url}" target="_blank">${title}</a></li>`;
+            }
+          });
+          html += '</ul>';
+        }
+
+        if (contacts.length > 0) {
+          html += '<h4>Kontakter</h4>';
+          contacts.forEach(c => {
+            const ca = c.attributes || {};
+            html += '<p>';
+            if (ca.name) html += `<strong>${ca.name}</strong><br>`;
+            if (ca.title) html += `${ca.title}<br>`;
+            const methods = ca.contactMethods || [];
+            methods.forEach(m => {
+              if (m.type === 'phone') {
+                html += `📞 ${m.value}<br>`;
+              } else if (m.type === 'email') {
+                html += `✉️ <a href="mailto:${m.value}">${m.value}</a><br>`;
+              }
+            });
+            html += '</p>';
+          });
+        }
+
+        if (accessibility.length > 0) {
+          html += '<h4>Tillgänglighet</h4><ul>';
+          accessibility.forEach(a => {
+            const aa = a.attributes || {};
+            if (aa.name) {
+              html += `<li>${aa.name}</li>`;
+            }
+          });
+          html += '</ul>';
+        }
+
+        if (regions.length > 0) {
+          html += '<h4>Stadsdel</h4><p>';
+          regions.forEach(r => {
+            const ra = r.attributes || {};
+            if (ra.name) {
+              html += `${ra.name}<br>`;
+            }
+          });
+          html += '</p>';
+        }
+
+        const sectionEntries = Object.values(contentSections);
+        if (sectionEntries.length > 0) {
+          sectionEntries.sort((a, b) => (a.priority || 0) - (b.priority || 0));
+          sectionEntries.forEach(sec => {
+            if (!sec) return;
+            const heading = sec.heading || '';
+            const content = sec.content || '';
+            if (heading) {
+              html += `<h4>${heading}</h4>`;
+            }
+            if (content) {
+              html += `<div>${content}</div>`;
+            }
+          });
+        }
+
+        if (!html) {
+          html = '<p>Ingen ytterligare information tillgänglig.</p>';
+        }
+
+        return html;
+      };
+    })();
+  </script>
+
+</body>
+</html>
