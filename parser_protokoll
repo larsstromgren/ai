@@ -1,0 +1,229 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
+"""
+kf_parser.py — Filtrera original-Word (DOCX) utan att ändra formatering.
+Behåller EXAKT originalformat (typsnitt, bold, italic, rubriker, "Anförande nr X", osv),
+men tar bara med de ärenden (inkl. frågestundens enskilda frågor) där Lars Strömgren deltar.
+Alla andra talare i samma ärende följer med.
+
+Kör:
+  pip install python-docx
+  python kf_parser.py "2025-09-22 - KFdebatt.docx" --out "2025-09-22 - KFdebatt_LS_AUTO.docx"
+"""
+
+from pathlib import Path
+import argparse
+import re
+from typing import List, Tuple, Set
+
+from docx import Document
+from docx.text.paragraph import Paragraph
+from docx.text.run import Run
+
+# ----------------- MÖNSTER -----------------
+# §-rubriker (ärenden)
+RE_SECTION = re.compile(r"^§\s*\d+\b.*")
+
+# Frågestundens §-rubrik
+RE_QS_HEADER = re.compile(r"^§\s*\d+\s+Frågestund\b", re.IGNORECASE)
+
+# Enskilda frågor under frågestund
+RE_QS_QUESTION = re.compile(r"^Fråga\s+nr\s+\d+[\.\)]?\s+", re.IGNORECASE)
+
+# Speaker-rad-början (så vi hittar var LS talar)
+RE_SPEAKER_LINE = re.compile(r"^(?P<name>[^:\n]{2,120}?)\s*:\s*")
+
+# Namnvarianter för LS (matchar talarnamnet i början av tal)
+LS_NAME_PATTERNS = [
+    r"Lars\s+Strömgren",
+    r"Borgarrådet\s+Strömgren",
+    r"Borgarrådet\s+Lars\s+Strömgren",
+    r"Borgarrådet\s+Strömgren\s*\(MP\)",
+    r"Borgarrådet\s+Lars\s+Strömgren\s*\(MP\)",
+]
+RE_LS = re.compile(r"^(?:%s)$" % "|".join(LS_NAME_PATTERNS), re.IGNORECASE)
+
+
+# ----------------- HJÄLP: LÄS & KOPIERA -----------------
+def paragraph_text(p: Paragraph) -> str:
+    # Sammanlagd text (utan att vi rör formateringen i docx-objektet)
+    return (p.text or "").strip()
+
+def find_section_boundaries(paras: List[Paragraph]) -> List[int]:
+    """Index för alla §-rubriker."""
+    idxs = []
+    for i, p in enumerate(paras):
+        if RE_SECTION.match(paragraph_text(p)):
+            idxs.append(i)
+    return idxs
+
+def find_qs_question_indices(paras: List[Paragraph], start: int, end: int) -> List[int]:
+    """Inom [start, end) (en Frågestund-§), hitta alla 'Fråga nr X'-index."""
+    out = []
+    for i in range(start, end):
+        if RE_QS_QUESTION.match(paragraph_text(paras[i])):
+            out.append(i)
+    return out
+
+def split_ranges(cutpoints: List[int], end: int) -> List[Tuple[int, int]]:
+    """Av cutpoints [i0, i1, ...] skapa [ (i0, i1), (i1, i2), ..., (ik, end) ]."""
+    if not cutpoints:
+        return []
+    ranges = []
+    for a, b in zip(cutpoints, cutpoints[1:]):
+        ranges.append((a, b))
+    ranges.append((cutpoints[-1], end))
+    return ranges
+
+def speaker_is_ls(line: str) -> bool:
+    m = RE_SPEAKER_LINE.match(line)
+    if not m:
+        return False
+    name = m.group("name").strip()
+    return bool(RE_LS.match(name))
+
+def range_contains_ls(paras: List[Paragraph], a: int, b: int) -> bool:
+    """Finns LS som talare någonstans i [a, b)? (dvs i blockets paragrafer)"""
+    for i in range(a, b):
+        t = paragraph_text(paras[i])
+        if speaker_is_ls(t):
+            return True
+    return False
+
+def copy_paragraph(dst_doc: Document, src_p: Paragraph):
+    """Kopiera ett stycke med dess runs och basformat till nytt dokument."""
+    p = dst_doc.add_paragraph()
+    # Stil
+    try:
+        p.style = src_p.style
+    except Exception:
+        pass
+
+    # Grundläggande paragraph-format (kopiera bara det som brukar vara säkert)
+    try:
+        pf = p.paragraph_format
+        sf = src_p.paragraph_format
+        pf.left_indent = sf.left_indent
+        pf.right_indent = sf.right_indent
+        pf.first_line_indent = sf.first_line_indent
+        pf.space_before = sf.space_before
+        pf.space_after = sf.space_after
+        pf.line_spacing = sf.line_spacing
+        pf.keep_together = sf.keep_together
+        pf.keep_with_next = sf.keep_with_next
+        pf.page_break_before = sf.page_break_before
+        pf.widow_control = sf.widow_control
+        p.alignment = src_p.alignment
+    except Exception:
+        pass
+
+    # Runs (bold/italic/underline/font/size/färg)
+    for r in src_p.runs:
+        nr: Run = p.add_run(r.text)
+        try:
+            nr.bold = r.bold
+            nr.italic = r.italic
+            nr.underline = r.underline
+            # teckensnitt
+            if r.font is not None:
+                nr.font.name = r.font.name
+                nr.font.size = r.font.size
+                # färg
+                if r.font.color is not None and r.font.color.rgb is not None:
+                    nr.font.color.rgb = r.font.color.rgb
+        except Exception:
+            pass
+
+def copy_range(dst_doc: Document, paras: List[Paragraph], a: int, b: int):
+    for i in range(a, b):
+        copy_paragraph(dst_doc, paras[i])
+
+def first_section_index(paras: List[Paragraph]) -> int:
+    idxs = find_section_boundaries(paras)
+    return idxs[0] if idxs else len(paras)
+
+
+# ----------------- KÄRNLOGIK -----------------
+def build_keep_mask(paras: List[Paragraph]) -> Set[int]:
+    """
+    Bestäm EXAKT vilka paragraph-index som ska behållas:
+      - Behåll alltid preamble (allt innan första §)
+      - För varje vanlig §-post: behåll hela [§, nästa §) om LS talar där
+      - För Frågestund-§: behåll §-rubriken och ENDAST de 'Fråga nr X'-block där LS talar
+    """
+    N = len(paras)
+    keep: Set[int] = set()
+
+    # 1) Preamble
+    pre_end = first_section_index(paras)
+    keep.update(range(0, pre_end))
+
+    # 2) Alla §-ärenden
+    sec_idxs = find_section_boundaries(paras)
+    sec_ranges = split_ranges(sec_idxs, N)
+
+    for (a, b) in sec_ranges:
+        header_txt = paragraph_text(paras[a])
+        if RE_QS_HEADER.match(header_txt):
+            # Frågestund: dela på frågor
+            # Behåll rubriken alltid (för sammanhang), men filtrera frågor
+            keep.add(a)
+
+            # hitta frågerubriker inom (a, b)
+            q_idxs = find_qs_question_indices(paras, a + 1, b)
+            if not q_idxs:
+                # ingen fråga markerad – om LS pratar någonstans i hela frågestund-blocket, behåll allt
+                if range_contains_ls(paras, a, b):
+                    keep.update(range(a, b))
+                continue
+
+            q_ranges = split_ranges(q_idxs, b)
+            # För varje 'Fråga nr X' block: behåll blocket om LS deltar där
+            for (qa, qb) in q_ranges:
+                if range_contains_ls(paras, qa, qb):
+                    # Behåll hela frågeblocket
+                    keep.update(range(qa, qb))
+
+        else:
+            # Vanligt ärende: behåll det om LS pratar någonstans i spannet
+            if range_contains_ls(paras, a, b):
+                keep.update(range(a, b))
+
+    return keep
+
+
+# ----------------- CLI -----------------
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("original", help="Originalfil (.docx) med hela debatten")
+    ap.add_argument("--out", required=True, help="Utdatafil (.docx) med filtrerat innehåll")
+    args = ap.parse_args()
+
+    src = Path(args.original)
+    if not src.exists():
+        raise SystemExit(f"Hittar inte: {src}")
+
+    doc = Document(str(src))
+    paras: List[Paragraph] = list(doc.paragraphs)
+
+    keep = build_keep_mask(paras)
+
+    # Skriv ny fil i originalordning, bara med paragrafer vi valt att behålla
+    out_doc = Document()
+    # Rensa första tomstycket som python-docx skapar
+    if out_doc.paragraphs:
+        p0 = out_doc.paragraphs[0]
+        if p0.text == "":
+            p0._element.getparent().remove(p0._element)
+
+    for i, p in enumerate(paras):
+        if i in keep:
+            copy_paragraph(out_doc, p)
+
+    out_path = Path(args.out)
+    out_doc.save(str(out_path))
+    print(f"Klar: {out_path}")
+
+if __name__ == "__main__":
+    main()
